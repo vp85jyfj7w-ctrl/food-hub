@@ -4,6 +4,7 @@ import secrets as _secrets
 from pathlib import Path
 from pydantic import Field, AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import os as _os
 
 # is_raspberry_pi() is lru_cached and reads no files until first called, so a
 # module-level import has no import-time cost or side-effects. Importing the
@@ -21,7 +22,11 @@ APP_VERSION = "0.19.2"
 # updating; only the user-facing brand lives here. The mDNS hostname is the one
 # device-local identifier that IS branded: new installs answer at pr.local
 # (FoodAssistant-a8fn).
-APP_NAME = "Pantry Raider"
+# Food Hub (FoodHub-0001): both are read from env vars so a fork can
+# rebrand without touching source. Unset APP_NAME/APP_TAGLINE behaves
+# exactly as upstream Pantry Raider did.
+APP_NAME = _os.environ.get("APP_NAME", "Pantry Raider").strip() or "Pantry Raider"
+APP_TAGLINE = _os.environ.get("APP_TAGLINE", "").strip()
 
 # GitHub repo used by the in-app update checker.
 GITHUB_REPO = "Syracuse3DPrintingOrg/PantryRaider"

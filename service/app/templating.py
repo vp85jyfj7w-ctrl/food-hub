@@ -2,7 +2,7 @@
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
-from .config import settings, theme_info, ui_scale_factor, resolve_custom_colors, nav_chrome_hidden, timer_chips_hidden, APP_NAME, APP_VERSION
+from .config import settings, theme_info, ui_scale_factor, resolve_custom_colors, nav_chrome_hidden, timer_chips_hidden, APP_NAME, APP_VERSION, APP_TAGLINE
 from .hardware import is_raspberry_pi
 from .ingress import template_globals
 from .navigation import (visible_tabs, auto_hidden_groups, build_nav_tree,
@@ -138,6 +138,7 @@ def theme_context(request: Request) -> dict:
         # after an update instead of serving a stale cached copy.
         "app_version": APP_VERSION,
         "app_name": APP_NAME,
+          "app_tagline": APP_TAGLINE,
         # Read-only DEMO MODE (FoodAssistant-pxp0). Surfaced on every render so
         # base.html can show the demo banner and templates can hide write
         # affordances with {% if not demo_mode %}. False on any normal install,

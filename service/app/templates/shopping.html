@@ -71,10 +71,15 @@
     </div>
 
     {% if shopping_backend == 'grocy' %}
-    <div class="mt-2">
+    <div class="mt-2 d-flex gap-2 flex-wrap">
       <button class="btn btn-sm btn-outline-secondary" onclick="clearDone()">
         <i class="bi bi-check2-all me-1"></i>Clear checked
       </button>
+      {% if shopping_print_configured %}
+      <button class="btn btn-sm btn-outline-primary" id="print-btn" onclick="printShoppingList()">
+        <i class="bi bi-printer me-1"></i>Print
+      </button>
+      {% endif %}
     </div>
     {% endif %}
   </div>
@@ -244,6 +249,29 @@ async function clearDone() {
     shoppingMsg('Could not clear the checked items. ' + prReason(e));
   }
   load(currentListId);
+}
+
+// Queues a print job on Our Shopping List's Epson receipt printer via
+// shopping-bridge (Food Hub sync, Phase 9.1). No polling for job completion
+// here -- shopping-print picks the job up and prints within a couple of
+// seconds on its own, so a queued response is confirmation enough.
+async function printShoppingList() {
+  const btn = document.getElementById('print-btn');
+  const original = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
+  try {
+    const r = await fetch('mealie/shopping/print', {method: 'POST'});
+    if (!r.ok) throw new Error(await prErrText(r));
+    shoppingMsg('');
+    if (btn) btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Sent!';
+  } catch (e) {
+    shoppingMsg('Could not print. ' + prReason(e));
+    if (btn) btn.innerHTML = original;
+  } finally {
+    if (btn) {
+      setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 2000);
+    }
+  }
 }
 
 // Restock suggestions: products used up recently that are now out of stock.

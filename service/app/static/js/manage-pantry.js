@@ -246,6 +246,25 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!hasCamera) {
     const b = document.getElementById('startScanBtn');
     if (b) b.classList.add('d-none');
+    // A non-secure origin makes the browser drop getUserMedia entirely, which
+    // used to look identical to "no camera hardware" -- the only sign anything
+    // was different was a small muted caption underneath. Point at the actual
+    // fix (open the same app over the configured public https address) when
+    // one is set, using the same lookup the phone-QR modal already makes;
+    // silently do nothing if no public URL is configured, same as before.
+    if (!window.isSecureContext) {
+      fetch('ui/qr/url').then(r => r.json()).then(d => {
+        if (!d || typeof d.url !== 'string' || !d.url.startsWith('https://')) return;
+        const notice = document.getElementById('insecure-camera-notice');
+        const link = document.getElementById('insecure-camera-link');
+        const hint = document.getElementById('camera-hint-default');
+        if (notice && link) {
+          link.href = d.url;
+          notice.classList.remove('d-none');
+          if (hint) hint.classList.add('d-none');
+        }
+      }).catch(() => {});
+    }
   }
   if (isKiosk) {
     const card = document.getElementById('camera-scan-card');

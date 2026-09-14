@@ -205,8 +205,20 @@
               <input type="file" id="barcodePhotoInput" accept="image/*" capture="environment"
                      class="d-none" onchange="decodeBarcodePhoto(this)">
             </div>
-            <div class="form-text mt-1">
-              Live scanning requires HTTPS. On HTTP use "Snap Barcode Photo" instead.
+            <div class="form-text mt-1" id="camera-hint-default">
+              Live scanning needs a secure (https) connection. On plain http, use "Snap Barcode Photo" instead.
+            </div>
+            {# Shown instead of the muted line above when JS confirms this page really
+               is on an insecure origin (manage-pantry.js) -- that's the exact situation
+               that silently hid the Start Camera button and left only the harder-to-read
+               single-photo option, with no visible explanation why (Will, Sept 2026). #}
+            <div class="alert alert-warning py-2 small mt-2 d-none" id="insecure-camera-notice">
+              <i class="bi bi-shield-lock me-1"></i>
+              This page opened over a plain (non-secure) connection, so the browser
+              won't allow live camera scanning here -- only the single-photo option
+              above works, and it's a much harder read than live scanning.
+              <a href="#" id="insecure-camera-link" class="alert-link">Open Food Hub securely</a>
+              to use the live scanner instead.
             </div>
           </div>
         </div>

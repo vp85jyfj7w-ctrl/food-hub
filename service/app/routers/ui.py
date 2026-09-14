@@ -518,6 +518,7 @@ async def add_page(request: Request):
         "request": request,
         "active": "add",
         "has_neokey": has_neokey,
+        "barcode_bridge_url": settings.barcode_bridge_url,
     })
 
 

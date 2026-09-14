@@ -15,6 +15,9 @@ var APP_VERSION = _mpConfig.version || '';
 // matches a known barcode commits straight to Grocy and the camera keeps
 // rolling for the next item, instead of stopping after every single scan.
 var QUICK_ADD_MODE = _mpConfig.quickAddMode === '1';
+// FoodHub-barcode-bridge: when set, the Stock Up tile sends a non-kiosk
+// browser here instead of switching panes in-page (selectMode() below).
+var BARCODE_BRIDGE_URL = _mpConfig.barcodeBridgeUrl || '';
 
 // The camera decoder is 367 KB, and only two actions ever touch it: decoding
 // a photo of a barcode, and running the live camera scanner. It used to be
@@ -95,6 +98,26 @@ function applyMode(mode) {
 window.addEventListener('pr-nav-signal', function () { refreshMode(); });
 
 async function selectMode(mode) {
+  // FoodHub-barcode-bridge: Stock Up on a real phone hands off to the
+  // external scanning page instead of switching panes here -- that page has
+  // a live camera scanner that works over plain http, unlike this page's own
+  // (getUserMedia needs https). The kiosk is exempt: it has no camera of its
+  // own, isKiosk means Stock Up here is driven by a wired USB scanner typing
+  // into this page, and there's nothing for the bridge page to do with that.
+  // The server-side mode still has to be set FIRST and awaited -- the bridge
+  // page's scans hit /pending/scan, which acts on whatever mode is already
+  // active, so leaving before this lands would scan into the wrong mode.
+  if (mode === 'inventory' && !isKiosk && BARCODE_BRIDGE_URL) {
+    try {
+      await fetch('pending/scanner-mode', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ mode }),
+      });
+    } catch (e) { /* best effort; worst case the bridge acts on the old mode */ }
+    window.location.href = BARCODE_BRIDGE_URL;
+    return;
+  }
   applyMode(mode);   // switch instantly; the POST confirms
   try {
     const r = await fetch('pending/scanner-mode', {

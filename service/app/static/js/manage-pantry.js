@@ -304,9 +304,28 @@ document.addEventListener('DOMContentLoaded', () => {
 // bursts, camera decodes). The server routes the scan by the shared mode;
 // the response's status tells us which pane's feedback to update, so a scan
 // that raced a mode change still lands its message somewhere sensible.
+//
+// Food Hub, Sept 2026 "scan, confirm date, add": an Inventory-mode scan (not
+// a grocycode label, which always consumes) no longer goes straight to
+// pending/scan -- it looks the barcode up first and, on a confirmed match,
+// asks for a best-by date and commits straight to stock via
+// confirmAndQuickAdd() below. Every other mode, and anything the lookup
+// can't resolve, still uses the original queue-then-review path.
+var _GROCYCODE_PREFIX = 'grcy:';
+
 async function submitScan(code) {
   code = (code || '').trim();
   if (!code) return;
+  if (currentMode === 'inventory' && !code.toLowerCase().startsWith(_GROCYCODE_PREFIX)) {
+    return confirmAndQuickAdd(code);
+  }
+  return submitScanToPending(code);
+}
+
+// The original scan behaviour: queue to Pending for review. Still used for
+// every non-inventory mode, for grocycode labels, and as the fallback when a
+// lookup for the new confirm-date flow can't resolve the barcode.
+async function submitScanToPending(code) {
   const statusId = {
     inventory: 'barcode-status', consume: 'consume-status',
     shopping: 'shopping-status', audit: 'audit-scan-status',
@@ -457,6 +476,113 @@ function addRecent(listId, html) {
   li.innerHTML = html;
   list.insertBefore(li, list.firstChild);
   while (list.children.length > 8) list.removeChild(list.lastChild);
+}
+
+// ---------------------------------------------- scan, confirm date, add ----
+// Food Hub, Sept 2026: an Inventory-mode scan looks the barcode up (read-only,
+// GET /pending/lookup) and, on a match, shows a small modal with the
+// suggested best-by date so it can be confirmed or corrected before the item
+// goes straight to stock (POST /pending/quick-add) -- no Pending row at all.
+// Anything the lookup can't resolve, or that fails to commit, falls back to
+// submitScanToPending() so a scan is never silently lost.
+var _confirmModalEl = null;
+var _confirmBsModal = null;
+var _confirmPending = null; // { code } while the modal is open, else null
+
+function ensureConfirmModal() {
+  if (_confirmModalEl) return;
+  const wrap = document.createElement('div');
+  wrap.innerHTML =
+    '<div class="modal fade" id="quickAddConfirmModal" tabindex="-1" ' +
+    'data-bs-backdrop="static" data-bs-keyboard="false">' +
+    '<div class="modal-dialog modal-dialog-centered"><div class="modal-content">' +
+    '<div class="modal-header"><h5 class="modal-title" id="quickAddConfirmName">Item</h5></div>' +
+    '<div class="modal-body">' +
+    '<label for="quickAddConfirmDate" class="form-label">Best-by date</label>' +
+    '<input type="date" id="quickAddConfirmDate" class="form-control">' +
+    '<div class="form-text" id="quickAddConfirmHint"></div>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+    '<button type="button" class="btn btn-outline-secondary" id="quickAddConfirmLater">Review later instead</button>' +
+    '<button type="button" class="btn btn-success" id="quickAddConfirmBtn">' +
+    '<i class="bi bi-check-lg me-1"></i>Add to stock</button>' +
+    '</div></div></div></div>';
+  document.body.appendChild(wrap.firstElementChild);
+  _confirmModalEl = document.getElementById('quickAddConfirmModal');
+  _confirmBsModal = new bootstrap.Modal(_confirmModalEl);
+  document.getElementById('quickAddConfirmBtn').addEventListener('click', onQuickAddConfirmed);
+  document.getElementById('quickAddConfirmLater').addEventListener('click', onQuickAddDeferred);
+}
+
+async function confirmAndQuickAdd(code) {
+  // A confirm prompt is already open for an earlier scan -- ignore repeats
+  // (the camera/wedge can fire again before the person has answered).
+  if (_confirmPending) return;
+  showStatus('barcode-status',
+    '<span class="spinner-border spinner-border-sm me-1"></span>Looking up...', 'info');
+  let data;
+  try {
+    const r = await fetch('pending/lookup?barcode=' + encodeURIComponent(code));
+    data = await r.json();
+  } catch (e) {
+    showStatus('barcode-status', 'Lookup failed: ' + esc(String(e)), 'danger');
+    return;
+  }
+  if (!data || data.status !== 'found') {
+    // Unknown / store-local / lookup trouble: fall back to the ordinary
+    // queue-to-Pending flow rather than lose the scan.
+    showStatus('barcode-status',
+      "Couldn't identify that barcode -- sending to Pending for review.", 'warning');
+    return submitScanToPending(code);
+  }
+  ensureConfirmModal();
+  _confirmPending = { code };
+  document.getElementById('quickAddConfirmName').textContent = data.name || code;
+  document.getElementById('quickAddConfirmDate').value = data.best_by_date || '';
+  document.getElementById('quickAddConfirmHint').textContent = data.best_by_date
+    ? 'Suggested from the product itself -- change it if the pack in your hand differs.'
+    : 'No date could be worked out -- enter the one on the pack, or leave it blank.';
+  showStatus('barcode-status', '', 'info');
+  _confirmBsModal.show();
+  setTimeout(() => document.getElementById('quickAddConfirmDate').focus(), 200);
+}
+
+async function onQuickAddConfirmed() {
+  if (!_confirmPending) return;
+  const code = _confirmPending.code;
+  const dateVal = document.getElementById('quickAddConfirmDate').value || '';
+  _confirmBsModal.hide();
+  _confirmPending = null;
+  showStatus('barcode-status',
+    '<span class="spinner-border spinner-border-sm me-1"></span>Adding...', 'info');
+  let result;
+  try {
+    const r = await fetch('pending/quick-add', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ barcode: code, quantity: 1, best_by_date: dateVal }),
+    });
+    result = await r.json();
+  } catch (e) {
+    showStatus('barcode-status', 'Add failed: ' + esc(String(e)), 'danger');
+    return;
+  }
+  if (result.status === 'instant_added') {
+    handleScanResult(code, result);
+  } else {
+    showStatus('barcode-status',
+      "Couldn't add it straight to stock (" + esc(result.error || result.status) +
+      ') -- sending to Pending for review instead.', 'warning');
+    await submitScanToPending(code);
+  }
+}
+
+function onQuickAddDeferred() {
+  if (!_confirmPending) return;
+  const code = _confirmPending.code;
+  _confirmBsModal.hide();
+  _confirmPending = null;
+  submitScanToPending(code);
 }
 
 var _barcodeSavedCount = 0;

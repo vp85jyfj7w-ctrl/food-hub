@@ -577,7 +577,7 @@ function savePaneRecipes(btn) {
 // run again (already-copied recipes are skipped) and Mealie is never changed.
 async function migrateRecipesFromMealie(btn) {
   const el = document.getElementById('recipes-migrate-result');
-  if (!confirm('Copy all your Mealie recipes into Pantry Raider and keep them here from now on? Mealie itself is not changed.')) return;
+  if (!confirm('Copy all your Mealie recipes into ' + (window.APP_NAME || 'Pantry Raider') + ' and keep them here from now on? Mealie itself is not changed.')) return;
   const orig = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Copying…';

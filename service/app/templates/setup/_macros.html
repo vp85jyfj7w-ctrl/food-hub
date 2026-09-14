@@ -114,7 +114,7 @@
            card lives in Security & Access and Return to full stack in
            Advanced. This macro keeps the satellite server cards together. #}
         {% macro upstream_cards() %}
-          {% call panel('Main Pantry Raider server',
+          {% call panel('Main {{ app_name }} server',
                         'This device signs in with the server\'s API key, pulls the shared config, then talks to Grocy, Mealie, and AI directly.') %}
             {% call srow('Server address', 'No trailing slash. A numeric IP is most reliable.',
                          'If you use a .local name and your network does not resolve mDNS, this device caches the server\'s IP after the first successful sync and falls back to it automatically.') %}
@@ -195,22 +195,22 @@
         {% macro recipe_connection_cards() %}
           {# Recipe library card (FoodAssistant-g0fd): says plainly where the
              recipes live and, while a Mealie is still the library, offers the
-             one-click copy into Pantry Raider. The shopping-list choice rides
+             one-click copy into {{ app_name }}. The shopping-list choice rides
              here too, saved by the pane's Save Recipes button. #}
           {% call panel('Recipe library',
                         'Where your recipes and meal plan are stored.',
-                        pill_text=('Pantry Raider' if recipes_backend_active == 'native' else 'Mealie'),
+                        pill_text=('{{ app_name }}' if recipes_backend_active == 'native' else 'Mealie'),
                         pill_kind=('good' if recipes_backend_active == 'native' else 'neutral')) %}
             {% if recipes_backend_active == 'native' %}
-            <p class="text-secondary small mt-1 mb-1">Your recipes are stored in Pantry Raider. Every import, the meal plan, and cooking suggestions work on their own; nothing else needs to be installed.</p>
+            <p class="text-secondary small mt-1 mb-1">Your recipes are stored in {{ app_name }}. Every import, the meal plan, and cooking suggestions work on their own; nothing else needs to be installed.</p>
             {% else %}
-            <p class="text-secondary small mt-1 mb-1">Your recipes come from your Mealie. You can keep it, or copy everything into Pantry Raider so recipes and the meal plan live here and Mealie is no longer needed. Your Mealie is never changed or removed.</p>
+            <p class="text-secondary small mt-1 mb-1">Your recipes come from your Mealie. You can keep it, or copy everything into {{ app_name }} so recipes and the meal plan live here and Mealie is no longer needed. Your Mealie is never changed or removed.</p>
             {% if not features.satellite %}
-            {% call srow('Move in', 'Copy your Mealie recipes into Pantry Raider.',
-                         'Copies every recipe (pictures included) into Pantry Raider and switches the library here. Safe to run again: recipes you already have are skipped. Mealie stays untouched and remains available as an import source.') %}
+            {% call srow('Move in', 'Copy your Mealie recipes into {{ app_name }}.',
+                         'Copies every recipe (pictures included) into {{ app_name }} and switches the library here. Safe to run again: recipes you already have are skipped. Mealie stays untouched and remains available as an import source.') %}
               <div class="set-row-actions">
                 <button type="button" class="btn btn-outline-info btn-sm" onclick="migrateRecipesFromMealie(this)">
-                  <i class="bi bi-box-arrow-in-down me-1"></i>Copy recipes into Pantry Raider
+                  <i class="bi bi-box-arrow-in-down me-1"></i>Copy recipes into {{ app_name }}
                 </button>
               </div>
               <div class="test-result mt-1" id="recipes-migrate-result"></div>
@@ -279,8 +279,8 @@
                      placeholder="https://mealie.example.com" value="{{ s.mealie_public_url }}" {% if features.satellite %}readonly{% endif %}>
             {% endcall %}
             {% if not s.mealie_api_key and not features.satellite %}
-            {% call srow('Automatic setup', 'Already run Mealie? Pantry Raider can connect itself.',
-                         'If your Mealie is freshly installed and still on its stock sign-in, Pantry Raider signs in, creates its own API token, secures the account, and adds a Groceries shopping list. Nothing to copy or paste.') %}
+            {% call srow('Automatic setup', 'Already run Mealie? {{ app_name }} can connect itself.',
+                         'If your Mealie is freshly installed and still on its stock sign-in, {{ app_name }} signs in, creates its own API token, secures the account, and adds a Groceries shopping list. Nothing to copy or paste.') %}
               <div class="set-row-actions">
                 <button class="btn btn-outline-info btn-sm" onclick="firstRunMealie(this)">
                   <i class="bi bi-stars me-1"></i>Set up for me
@@ -293,8 +293,8 @@
               <div style="max-width:420px">{{ secret_input('mealie_api_key', 'Mealie → User Profile → API Tokens') }}</div>
             {% endcall %}
             {% if s.mealie_admin_password %}
-            {% call srow('Mealie sign-in', 'Saved when Pantry Raider set Mealie up.',
-                         'Pantry Raider secured the Mealie account with its own password. You never need it day to day; reveal it here if you ever want to sign in to Mealie directly.') %}
+            {% call srow('Mealie sign-in', 'Saved when {{ app_name }} set Mealie up.',
+                         '{{ app_name }} secured the Mealie account with its own password. You never need it day to day; reveal it here if you ever want to sign in to Mealie directly.') %}
               <div class="set-row-actions">
                 <button class="btn btn-outline-secondary btn-sm" onclick="revealFirstRunLogin('mealie', 'mealie-login-reveal')">
                   <i class="bi bi-eye me-1"></i>Show sign-in
@@ -346,7 +346,7 @@
           {% endcall %}
 
           {% call panel('Forager community recipes',
-                        'Browse and search recipes shared by other Pantry Raider kitchens, and share your own.',
+                        'Browse and search recipes shared by other {{ app_name }} kitchens, and share your own.',
                         pill_text=('On' if s.forager_recipes_enabled else 'Off') if s.cloud_instance_token else 'Connect Forager',
                         pill_kind=('good' if (s.cloud_instance_token and s.forager_recipes_enabled) else 'neutral')) %}
             {% if s.cloud_instance_token %}

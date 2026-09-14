@@ -9,7 +9,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Resolve all relative links against the app root (or the HA Ingress prefix) -->
   <base href="{{ ingress_path }}/">
-  <title>Sign In: Pantry Raider</title>
+  <title>Sign In: {{ app_name }}</title>
   {% if theme_css %}
   <link href="{{ theme_css }}" rel="stylesheet">
   {% else %}
@@ -64,7 +64,7 @@
   <div class="card" style="width: 100%; max-width: 360px;">
     <div class="card-body p-4">
       <h5 class="card-title text-center mb-4">
-        <i class="bi bi-fridge me-2"></i>Pantry Raider
+        <i class="bi bi-fridge me-2"></i>{{ app_name }}
       </h5>
       {% if error %}
       <div class="alert alert-danger py-2">{{ error }}</div>

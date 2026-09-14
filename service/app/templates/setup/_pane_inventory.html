@@ -8,7 +8,7 @@
           <p class="pane-intro">Where your stock lives: the Grocy backend and the storage buckets it's grouped into.</p>
 
           {% call panel('Grocy inventory backend',
-                        'Grocy stores your stock, locations, and consumption history. Pantry Raider reads and updates it through its API.',
+                        'Grocy stores your stock, locations, and consumption history. {{ app_name }} reads and updates it through its API.',
                         pill_text=('Set' if s.grocy_api_key else 'Not set'),
                         pill_kind=('good' if s.grocy_api_key else 'neutral')) %}
             {% call srow('Server address', 'Full URL, no trailing slash.',
@@ -21,8 +21,8 @@
               {% endif %}
             {% endcall %}
             {% if not s.grocy_api_key and not features.satellite %}
-            {% call srow('Automatic setup', 'Let Pantry Raider connect itself.',
-                         'If this Grocy is freshly installed and still on its stock sign-in, Pantry Raider signs in, creates its own API key, and secures the admin account. Nothing to copy or paste.') %}
+            {% call srow('Automatic setup', 'Let {{ app_name }} connect itself.',
+                         'If this Grocy is freshly installed and still on its stock sign-in, {{ app_name }} signs in, creates its own API key, and secures the admin account. Nothing to copy or paste.') %}
               <div class="set-row-actions">
                 <button class="btn btn-outline-info btn-sm" onclick="firstRunGrocy(this)">
                   <i class="bi bi-stars me-1"></i>Set up for me
@@ -32,12 +32,12 @@
             {% endcall %}
             {% endif %}
             {% call srow('API key', 'From Grocy.',
-                         'In Grocy, open Settings then Manage API keys and add one. Paste it here so Pantry Raider can read and update your stock.') %}
+                         'In Grocy, open Settings then Manage API keys and add one. Paste it here so {{ app_name }} can read and update your stock.') %}
               <div style="max-width:420px">{{ secret_input('grocy_api_key', 'Grocy → Manage API Keys') }}</div>
             {% endcall %}
             {% if s.grocy_admin_password %}
-            {% call srow('Grocy sign-in', 'Saved when Pantry Raider set Grocy up.',
-                         'Pantry Raider secured the Grocy admin account with its own password. You never need it day to day; reveal it here if you ever want to sign in to Grocy directly.') %}
+            {% call srow('Grocy sign-in', 'Saved when {{ app_name }} set Grocy up.',
+                         '{{ app_name }} secured the Grocy admin account with its own password. You never need it day to day; reveal it here if you ever want to sign in to Grocy directly.') %}
               <div class="set-row-actions">
                 <button class="btn btn-outline-secondary btn-sm" onclick="revealFirstRunLogin('grocy', 'grocy-login-reveal')">
                   <i class="bi bi-eye me-1"></i>Show sign-in
@@ -75,7 +75,7 @@
           {% call panel('Community shelf life',
                         'Best-by estimates learned from real kitchens, and an optional anonymous way to contribute yours.') %}
             {% call srow('Use community estimates', 'Better shelf-life guesses for new items.',
-                         'Once a day the app downloads a small table of shelf lives learned from other Pantry Raider kitchens and uses it when suggesting a best-by date for a new item. Your own expiry rules always win over a community value. This only downloads; it sends nothing about you or your pantry.') %}
+                         'Once a day the app downloads a small table of shelf lives learned from other {{ app_name }} kitchens and uses it when suggesting a best-by date for a new item. Your own expiry rules always win over a community value. This only downloads; it sends nothing about you or your pantry.') %}
               {{ toggle('use_community_expiry', checked=s.use_community_expiry, label='Use community shelf-life estimates') }}
             {% endcall %}
             {% call srow('Share your corrections', 'Anonymous. Off unless you turn it on.',

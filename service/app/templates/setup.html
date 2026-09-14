@@ -100,7 +100,7 @@
        internally if the menu itself is taller than the viewport. */
     .side-menu { max-height: calc(100vh - 2rem); overflow-y: auto; }
     /* Denser variant for the busy Start Page / Stream Deck editors so a whole
-       page of controls fits on a laptop screen (Pantry Raider): tighter card
+       page of controls fits on a laptop screen ({{ app_name }}): tighter card
        padding, smaller gaps between blocks, and compact labels. Long help text
        moves into info() tooltips instead of full-width paragraphs. */
     .editor-dense { padding: 1rem 1.1rem; }
@@ -347,7 +347,7 @@
     <i class="bi bi-hdd-network fs-5"></i>
     <div>
       <strong>This is a Pi Remote (satellite).</strong>
-      It mirrors a main Pantry Raider server. Backend settings (Grocy, Mealie, AI,
+      It mirrors a main {{ app_name }} server. Backend settings (Grocy, Mealie, AI,
       weather) are managed on the main server and shown here read-only. This device
       keeps its own display, Stream Deck, and security settings.
     </div>
@@ -363,7 +363,7 @@
   </div>
 
   <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 my-3">
-    <div class="logo"><i class="bi bi-fridge me-2 text-primary"></i>Pantry Raider
+    <div class="logo"><i class="bi bi-fridge me-2 text-primary"></i>{{ app_name }}
       <span class="text-secondary fw-normal fs-6 ms-1">Settings</span></div>
     <a href="ui/" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to app</a>
   </div>
@@ -599,7 +599,7 @@
 
 
         {# Weather location/units no longer have their own settings section: they
-           are set on the Weather page itself (Pantry Raider). These hidden inputs
+           are set on the Weather page itself ({{ app_name }}). These hidden inputs
            stay so the Stream Deck save still reads the current location/units the
            deck weather key should use. #}
         {% if not features.satellite %}
@@ -631,10 +631,11 @@
    talk to the browser, never call into the deferred files. #}
 <script src="static/vendor/bootstrap.bundle.min.js" defer></script>
 <script>
+window.APP_NAME = {{ app_name | tojson }};
 const TABS = {{ tabs | tojson }};
 // Pristine built-in layout for the nav editor's Reset to defaults (FoodAssistant-oret).
 window.TABS_DEFAULT = {{ tabs_default | tojson }};
-// On-screen Start Page editor data (Pantry Raider): the shared custom buttons
+// On-screen Start Page editor data ({{ app_name }}): the shared custom buttons
 // and the saved layout. The built-in key catalog is the deck's own (_sdCatalog),
 // so the Start Page and Stream Deck editors are identical.
 const START_CUSTOMS = {{ start_customs | tojson }};

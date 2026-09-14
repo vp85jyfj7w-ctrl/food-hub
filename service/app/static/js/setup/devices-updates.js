@@ -75,7 +75,7 @@ async function scanLanForServer(inputId, resultId) {
     const servers = (d.found || []).filter(h => h.mode !== 'pi_remote' && h.mode !== 'satellite');
     if (!servers.length) {
       out.className = 'small mt-1 text-warning';
-      out.textContent = 'No Pantry Raider servers found on this subnet.';
+      out.textContent = 'No ' + (window.APP_NAME || 'Pantry Raider') + ' servers found on this subnet.';
       return;
     }
     if (servers.length === 1) {

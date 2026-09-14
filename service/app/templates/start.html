@@ -17,7 +17,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <base href="{{ ingress_path }}/">
-  <title>Start: Pantry Raider</title>
+  <title>Start: {{ app_name }}</title>
   {# Mark an appliance panel BEFORE anything paints, so the ambient drift never
      starts there (see .pr-still below). In the head on purpose: setting it later
      would let a frame or two of animation through, and on this page a single
@@ -412,7 +412,7 @@
       <img src="static/icons/logo-mark.png" alt="" class="glance-mark">
       <div class="glance-hello">
         <span class="glance-eyebrow" id="glance-greeting">Welcome back</span>
-        <h1 class="glance-title">Welcome to <span class="glance-accent">Pantry Raider</span></h1>
+        <h1 class="glance-title">Welcome to <span class="glance-accent">{{ app_name }}</span></h1>
         <p class="glance-tag">Your kitchen, at a glance. Where to?</p>
       </div>
     </div>

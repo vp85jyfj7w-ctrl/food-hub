@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Meal Plan: Pantry Raider{% endblock %}
+{% block title %}Meal Plan: {{ app_name }}{% endblock %}
 {% block content %}
 
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3 mb-3">
@@ -86,7 +86,7 @@
 
 {% block scripts %}
 <script>
-// MEALIE_URL is null when the plan lives in Pantry Raider's own store; recipe
+// MEALIE_URL is null when the plan lives in {{ app_name }}'s own store; recipe
 // titles then render as plain text instead of Mealie deep links.
 const MEALIE_URL = {{ (mealie_url if mealplan_backend == 'mealie' else None) | tojson }};
 const TYPE_ORDER = {breakfast: 0, lunch: 1, dinner: 2, side: 3};

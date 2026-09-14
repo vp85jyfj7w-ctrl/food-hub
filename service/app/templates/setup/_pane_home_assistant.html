@@ -6,7 +6,7 @@
              streamdeck_ha_token, ha_events_enabled, ha_events_device,
              ha_camera_popup_seconds) and the setup snippet ids are unchanged. -->
         <div class="tab-pane fade" id="pane-home-assistant">
-          <p class="pane-intro">Connect Home Assistant to power the Stream Deck Home Assistant keys, camera discovery, and on-screen notifications. The easiest way is the Pantry Raider integration inside Home Assistant, which sets this page up for you. Home Assistant is optional: everything else works without it.</p>
+          <p class="pane-intro">Connect Home Assistant to power the Stream Deck Home Assistant keys, camera discovery, and on-screen notifications. The easiest way is the {{ app_name }} integration inside Home Assistant, which sets this page up for you. Home Assistant is optional: everything else works without it.</p>
 
           {% call panel('Home Assistant connection', 'How this device reaches Home Assistant.') %}
             {% call srow('Status', 'Whether the connection is set up.') %}
@@ -16,7 +16,7 @@
               <span class="badge bg-secondary" id="ha-conn-status">Not configured</span>
               {% endif %}
             {% endcall %}
-            <p class="text-secondary small mt-2 mb-2">The recommended path runs from the Home Assistant side: install the <strong>Pantry Raider</strong> integration through HACS, add it in Home Assistant (it can find this device on your network by itself), and approve the pairing code shown on the kitchen screen. The connection here fills in automatically, and notifications and camera pop-ups work in Home Assistant out of the box: every Pantry Raider screen gets its own notify entity, no YAML needed. See the
+            <p class="text-secondary small mt-2 mb-2">The recommended path runs from the Home Assistant side: install the <strong>{{ app_name }}</strong> integration through HACS, add it in Home Assistant (it can find this device on your network by itself), and approve the pairing code shown on the kitchen screen. The connection here fills in automatically, and notifications and camera pop-ups work in Home Assistant out of the box: every {{ app_name }} screen gets its own notify entity, no YAML needed. See the
               <a href="https://docs.pantryraider.app/home-assistant-integration/" target="_blank" rel="noopener">Home Assistant integration guide</a> for the steps.</p>
             <details id="ha-advanced-connection">
               <summary class="small text-info" style="cursor:pointer">Advanced setup (manual address and token)</summary>
@@ -57,7 +57,7 @@
           {% call panel('On-screen notifications & camera pop-ups',
                         'Show messages and camera pop-ups pushed from Home Assistant on this device\'s screen.') %}
             {% call srow('Show notifications', 'The default for all devices.',
-                         'Notifications sent from Home Assistant appear on this device\'s screen and any open browser tab. With the Pantry Raider integration installed, an automation just uses this device\'s notify entity (or the Pantry Raider camera pop-up service); nothing to configure.') %}
+                         'Notifications sent from Home Assistant appear on this device\'s screen and any open browser tab. With the {{ app_name }} integration installed, an automation just uses this device\'s notify entity (or the {{ app_name }} camera pop-up service); nothing to configure.') %}
               {{ toggle('ha_events_enabled', checked=s.ha_events_enabled, disabled=features.satellite, label='Show Home Assistant notifications and camera pop-ups on screen') }}
             {% endcall %}
             {# Per-device override (FoodAssistant-vcuz): each device decides for
@@ -91,7 +91,7 @@
             {% endcall %}
             <details class="mt-2" id="ha-setup-details">
               <summary class="small text-info" style="cursor:pointer">Advanced setup (manual rest_command + automation)</summary>
-              <p class="text-secondary small mt-2 mb-1">This manual route is only needed when the Pantry Raider integration is not installed in Home Assistant; with the integration, notifications and camera pop-ups are built in.</p>
+              <p class="text-secondary small mt-2 mb-1">This manual route is only needed when the {{ app_name }} integration is not installed in Home Assistant; with the integration, notifications and camera pop-ups are built in.</p>
               <p class="text-secondary small mt-2 mb-1">This device's URL is filled in below. Paste an API key from
                 <a href="#" onclick="document.querySelector('[data-bs-target=&quot;#pane-security&quot;]')?.click();return false;">Settings &gt; Security</a>
                 where the placeholder is, then add this to your Home Assistant <code>configuration.yaml</code>:

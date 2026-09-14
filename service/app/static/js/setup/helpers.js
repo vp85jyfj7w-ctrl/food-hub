@@ -810,7 +810,7 @@ async function _watchMealie() {
       if (!s || s.ok === false) continue;
       if (s.state === 'running') {
         running = true;
-        setResult('mealie-start-result', true, 'Mealie is running. Connecting it to Pantry Raider…');
+        setResult('mealie-start-result', true, 'Mealie is running. Connecting it to ' + (window.APP_NAME || 'Pantry Raider') + '…');
         _enableMealieLinks();
         await _mealieAutoConnect();
       } else if (s.state === 'not-installed') {
@@ -842,7 +842,7 @@ async function startMealie(btn) {
       return;
     }
     if (d.state === 'running') {
-      setResult('mealie-start-result', true, 'Mealie is running. Connecting it to Pantry Raider…');
+      setResult('mealie-start-result', true, 'Mealie is running. Connecting it to ' + (window.APP_NAME || 'Pantry Raider') + '…');
       _enableMealieLinks();
       await _mealieAutoConnect();
       return;

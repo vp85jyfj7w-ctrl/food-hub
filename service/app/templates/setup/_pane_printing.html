@@ -173,7 +173,7 @@
             </p>
             {% else %}
             <p class="mb-0 text-secondary small">
-              Bluetooth label printer setup is available on a Pantry Raider appliance today. On this server, connect a label printer over the network instead, using Find printers or Add by address above.
+              Bluetooth label printer setup is available on a {{ app_name }} appliance today. On this server, connect a label printer over the network instead, using Find printers or Add by address above.
             </p>
             {% endif %}
           {% endcall %}
@@ -230,7 +230,7 @@
               <div class="test-result mt-1" id="ld-printer-sizes-result"></div>
             {% endcall %}
             {% call srow('Preview', 'A sample label at the size above.',
-                         'Show logo prints the Pantry Raider logo in the corner of every food label, in black and white.') %}
+                         'Show logo prints the {{ app_name }} logo in the corner of every food label, in black and white.') %}
               <div class="d-flex flex-wrap align-items-center gap-3">
                 <div class="border rounded d-inline-block p-2 bg-body-tertiary">
                   <img id="label-preview-img" alt="Label preview"

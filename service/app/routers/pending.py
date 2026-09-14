@@ -267,6 +267,56 @@ async def _consume_extras(barcode: str) -> dict:
         return {}
 
 
+async def _commit_instant_add(item: FoodItem, barcode: str, db: Session) -> Optional[dict]:
+    """Commit ``item`` straight to Grocy stock and return the instant_added reply.
+
+    Shared by two callers that arrive at the item to commit differently: the
+    automatic "Scan Next Item" path in scan_barcode() (quick_add_mode, which
+    guesses everything including the date), and the explicit /pending/quick-add
+    endpoint (a human has already confirmed the date via /pending/lookup). Both
+    want the same commit -- import to Grocy, record best-by provenance, tag the
+    active shopping session, autocheck the shopping list -- so it lives once
+    here rather than twice.
+
+    Sets item.barcode so Grocy links the scanned code to the product
+    (GrocyClient.import_item does this when the field is present); a later
+    consume-mode scan of the same barcode then resolves without a name lookup.
+
+    Returns None on a Grocy outage/failure so the caller can fall back to
+    queueing the scan instead of losing it.
+    """
+    item.barcode = barcode
+    grocy = GrocyClient()
+    try:
+        result = await grocy.import_item(item)
+    except Exception as e:  # noqa: BLE001 - Grocy outage: caller falls back to queueing
+        logger.warning("Instant add commit failed for %s: %s", barcode, e)
+        return None
+    if item.best_by_date is not None:
+        best_by_provenance.record(
+            result.get("product_id"), item.name,
+            item.best_by_source or "manual",
+            item.best_by_date.isoformat(),
+        )
+    try:
+        session = foodhub_session.current(db)
+        if session:
+            foodhub_retailers.record_purchase(
+                db, session.retailer_id, barcode=barcode,
+                grocy_product_id=result.get("product_id"))
+            foodhub_session.bump_item_count(db, session.id)
+    except Exception:  # noqa: BLE001 - tagging must never fail a commit
+        db.rollback()
+    if (settings.barcode_autocheck_shopping
+            and shopping_source.shopping_available()):
+        try:
+            await _autocheck_shopping(item.name)
+        except Exception:  # noqa: BLE001 - the autocheck must never fail a commit
+            pass
+    return {"status": "instant_added", "mode": "inventory",
+            "item": {"name": item.name, "product_id": result.get("product_id")}}
+
+
 class PendingUpdate(BaseModel):
     name: Optional[str] = None
     quantity: Optional[float] = None
@@ -507,37 +557,11 @@ async def scan_barcode(body: ScanRequest, request: Request, db: Session = Depend
             item = None
         if item is not None:
             item.quantity = body.quantity
-            grocy = GrocyClient()
-            try:
-                result = await grocy.import_item(item)
-            except Exception as e:  # noqa: BLE001 - Grocy outage: fall back to queueing
-                logger.warning("Quick-add commit failed for %s, queueing instead: %s",
-                               barcode, e)
-                item = None
-            if item is not None:
-                if item.best_by_date is not None:
-                    best_by_provenance.record(
-                        result.get("product_id"), item.name,
-                        item.best_by_source or "manual",
-                        item.best_by_date.isoformat(),
-                    )
-                try:
-                    session = foodhub_session.current(db)
-                    if session:
-                        foodhub_retailers.record_purchase(
-                            db, session.retailer_id, barcode=barcode,
-                            grocy_product_id=result.get("product_id"))
-                        foodhub_session.bump_item_count(db, session.id)
-                except Exception:  # noqa: BLE001 - tagging must never fail a commit
-                    db.rollback()
-                if (settings.barcode_autocheck_shopping
-                        and shopping_source.shopping_available()):
-                    try:
-                        await _autocheck_shopping(item.name)
-                    except Exception:
-                        pass
-                return {"status": "instant_added", "mode": mode,
-                       "item": {"name": item.name, "product_id": result.get("product_id")}}
+            outcome = await _commit_instant_add(item, barcode, db)
+            if outcome is not None:
+                return outcome
+            # Grocy import failed: fall through to the ordinary queueing code
+            # below rather than lose the scan.
 
     # Same barcode already pending → bump quantity instead of duplicating
     existing = (
@@ -649,6 +673,108 @@ def _spawn_enrichment(item_id: int, barcode: str) -> None:
     except RuntimeError:
         return
     asyncio.create_task(enrich_pending_item(item_id, barcode))
+
+
+@router.get("/lookup")
+async def lookup_for_confirm(barcode: str, request: Request, db: Session = Depends(get_db)):
+    """Resolve a barcode to a proposed item, read-only, for the "scan, confirm
+    date, add" flow (Food Hub, Sept 2026): the caller shows the person this
+    name and suggested best-by date, lets them edit the date, then posts the
+    confirmed values to POST /pending/quick-add. Nothing is persisted here --
+    safe to call on every scan even if the person cancels or the barcode turns
+    out unknown.
+
+    On a satellite this forwards to the main server, same as every other
+    pending route (barcode lookup itself needs no shared state, but this keeps
+    one code path rather than two).
+    """
+    if _upstream():
+        return await _forward(request, "/lookup")
+
+    barcode = barcode.strip()
+    if not barcode:
+        raise HTTPException(400, "Barcode is required")
+    try:
+        item = await lookup_barcode(barcode, db)
+    except BarcodeStoreLocal:
+        return {"status": "store_local", "barcode": barcode}
+    except (BarcodeNotFound, BarcodeServiceError):
+        return {"status": "not_found", "barcode": barcode}
+    return {
+        "status": "found",
+        "barcode": barcode,
+        "name": item.name,
+        "brand": item.brand,
+        "category": item.category.value,
+        "unit": item.unit,
+        "storage_type": item.storage_type.value,
+        "best_by_date": item.best_by_date.isoformat() if item.best_by_date else None,
+        "best_by_source": item.best_by_source,
+    }
+
+
+class QuickAddConfirm(BaseModel):
+    barcode: str
+    quantity: float = 1.0
+    # None = leave whatever lookup proposed; "" = no date; else an ISO date
+    # the person confirmed or edited on the "scan, confirm date, add" prompt.
+    best_by_date: Optional[str] = None
+    source: str = "scanner"
+
+
+@router.post("/quick-add")
+async def quick_add_confirmed(body: QuickAddConfirm, request: Request,
+                              db: Session = Depends(get_db)):
+    """Commit a barcode straight to stock with a person-confirmed date,
+    skipping Pending entirely (Food Hub, Sept 2026 "scan, confirm date, add"
+    flow). The caller already looked the barcode up via GET /pending/lookup
+    and showed the person a date to confirm or edit, so this trusts the date
+    it is given rather than guessing one itself.
+
+    Independent of the quick_add_mode setting -- that governs the fully
+    automatic guess-the-date-and-skip-review path in scan_barcode(); this is
+    an explicit, human-confirmed commit and works whether or not that setting
+    is on. Always treated as an inventory add (that is the only thing this
+    flow is for): scanner_mode is not consulted.
+    """
+    if _upstream():
+        return await _forward(request, "/quick-add")
+
+    barcode = body.barcode.strip()
+    if not barcode:
+        raise HTTPException(400, "Barcode is required")
+    try:
+        item = await lookup_barcode(barcode, db)
+    except BarcodeStoreLocal as e:
+        return JSONResponse(
+            {"status": "store_local", "barcode": barcode, "error": str(e)},
+            status_code=200)
+    except (BarcodeNotFound, BarcodeServiceError) as e:
+        return JSONResponse(
+            {"status": "lookup_failed", "barcode": barcode, "error": str(e)},
+            status_code=200)
+
+    item.quantity = body.quantity
+    if body.best_by_date is not None:
+        if body.best_by_date == "":
+            item.best_by_date = None
+        else:
+            try:
+                item.best_by_date = date.fromisoformat(body.best_by_date)
+            except ValueError:
+                return JSONResponse(
+                    {"status": "invalid_date", "barcode": barcode,
+                     "best_by_date": body.best_by_date},
+                    status_code=200)
+        item.best_by_source = "manual"
+
+    outcome = await _commit_instant_add(item, barcode, db)
+    if outcome is None:
+        return JSONResponse(
+            {"status": "commit_failed", "barcode": barcode,
+             "error": "Could not reach Grocy. Try again in a moment."},
+            status_code=200)
+    return outcome
 
 
 class PendingItemsRequest(BaseModel):

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Upload
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from .. import config
 from ..config import settings, appliances_clause
 from ..database import get_db
 from ..dependencies import get_enrich_provider
@@ -2127,3 +2128,35 @@ async def clear_done_shopping(payload: ClearDonePayload = Body(default_factory=C
     except (GrocyError, ValueError) as e:
         raise HTTPException(502, str(e))
     return {"ok": True, "removed": removed}
+
+
+@router.post("/shopping/print")
+async def print_shopping_list():
+    """Queue a print job on Our Shopping List's Epson receipt printer, via
+    shopping-bridge's own API (Food Hub sync, Phase 9.1).
+
+    Runs an immediate sync first (POST /api/sync/now on the bridge) so an
+    item added here moments ago is not missed by the bridge's normal 30s
+    poll -- it lands on the printed receipt, not just eventually on the
+    mirrored list. That call is best-effort: a failure there still lets the
+    print go ahead against whatever the bridge already has.
+    """
+    if not _shopping_grocy():
+        raise HTTPException(400, "Printing is only wired up for the Grocy shopping list.")
+    if not (config.SHOPPING_BRIDGE_URL and config.SHOPPING_BRIDGE_TOKEN):
+        raise HTTPException(503, "Our Shopping List's printer isn't configured here.")
+    headers = {"Authorization": f"Bearer {config.SHOPPING_BRIDGE_TOKEN}"}
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            await client.post(f"{config.SHOPPING_BRIDGE_URL}/api/sync/now", headers=headers)
+        except httpx.HTTPError:
+            pass
+        try:
+            r = await client.post(f"{config.SHOPPING_BRIDGE_URL}/api/print", headers=headers)
+        except httpx.HTTPError as e:
+            raise HTTPException(502, f"Could not reach the printer service: {e}")
+    if r.status_code == 400:
+        raise HTTPException(400, "The list is empty -- nothing to print.")
+    if r.status_code >= 400:
+        raise HTTPException(502, f"Print request failed ({r.status_code}).")
+    return r.json()

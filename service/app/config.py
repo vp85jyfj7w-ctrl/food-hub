@@ -50,6 +50,20 @@ AMAZON_STOREFRONT_URL = _os.environ.get("AMAZON_STOREFRONT_URL", "https://www.am
 # only; a BUYMEACOFFEE_URL env var overrides it, and empty hides the link.
 BUYMEACOFFEE_URL = _os.environ.get("BUYMEACOFFEE_URL", "https://www.buymeacoffee.com/syracuse3dprinting").strip()
 
+# Our Shopping List / shopping-bridge integration (Food Hub sync, Phase 9.1):
+# lets the Shopping page's Print button queue a job on the household's Epson
+# receipt printer via shopping-bridge's own API. An internal service-to-service
+# credential, not a per-user Settings field, so this is env-var only like the
+# Associates tag above. SHOPPING_BRIDGE_TOKEN_FILE (a mounted secret file) is
+# preferred over SHOPPING_BRIDGE_TOKEN directly, matching how shopping-bridge
+# itself reads its own Grocy API key. Both empty simply hides the Print button.
+SHOPPING_BRIDGE_URL = _os.environ.get("SHOPPING_BRIDGE_URL", "").strip().rstrip("/")
+_shopping_bridge_token_file = _os.environ.get("SHOPPING_BRIDGE_TOKEN_FILE", "").strip()
+if _shopping_bridge_token_file and Path(_shopping_bridge_token_file).exists():
+    SHOPPING_BRIDGE_TOKEN = Path(_shopping_bridge_token_file).read_text().strip()
+else:
+    SHOPPING_BRIDGE_TOKEN = _os.environ.get("SHOPPING_BRIDGE_TOKEN", "").strip()
+
 # UI themes. Each entry carries the Bootstrap 5.3 colour mode (data-bs-theme)
 # and an optional vendored Bootswatch stylesheet served from /static. When
 # "stylesheet" is None the default Bootstrap CSS is used (native light/dark).

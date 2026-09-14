@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from urllib.parse import quote as _quote, urlencode as _urlencode
 
-from ..config import settings, BUYMEACOFFEE_URL, APP_VERSION, GITHUB_REPO
+from ..config import (settings, BUYMEACOFFEE_URL, APP_VERSION, GITHUB_REPO,
+                      SHOPPING_BRIDGE_URL, SHOPPING_BRIDGE_TOKEN)
 from ..passwords import verify_secret, looks_hashed
 from .. import totp as local_totp
 from ..database import get_db
@@ -613,6 +614,9 @@ async def shopping_page(request: Request):
         # or "mealie" (installs still running their recipes there).
         "shopping_backend": shopping_source.active_backend(),
         "mealie_url": settings.mealie_link_url(),
+        # Print button (Phase 9.1, Our Shopping List / shopping-bridge sync):
+        # only worth showing once the bridge URL + token are actually set.
+        "shopping_print_configured": bool(SHOPPING_BRIDGE_URL and SHOPPING_BRIDGE_TOKEN),
     })
 
 

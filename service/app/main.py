@@ -353,7 +353,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# No CORS middleware on purpose (security review, Jul 2026). Every browser
+# No CORS middleware by default (security review, Jul 2026). Every browser
 # client is same-origin: the web UI and kiosk pages fetch relative URLs, the
 # phone QR flow opens the app's own address, and the setup wizard posts to its
 # own origin. The headless clients (Home Assistant REST sensors, the satellite
@@ -361,9 +361,22 @@ app = FastAPI(
 # no CORS preflight at all. The old allow_origins=["*"] therefore served no
 # client and only widened the browser attack surface (any web page could probe
 # the LAN address and read whatever answers without a login). Same-origin is
-# the browser default and strictly safer. If a cross-origin browser client
-# ever appears, add CORSMiddleware back gated on an env-only allowlist
-# setting, never "*".
+# the browser default and strictly safer.
+#
+# A cross-origin browser client did eventually appear (FoodHub-barcode-bridge,
+# Sept 2026): a page hosted elsewhere (e.g. Netlify) doing its own live
+# barcode-camera scanning and posting the result to /pending/scan, built
+# because the app's own scanner needs https and the only https address here
+# is behind a proxy that the login flow treats as an internet origin and gates
+# behind 2FA. Rather than weaken that login check, the external page
+# authenticates with an X-API-Key instead of a session -- require_auth() below
+# already grants API-key requests full access regardless of origin -- so the
+# only thing missing was letting the BROWSER read the JSON response back
+# cross-origin. Per the note above, that stays gated on an explicit allowlist,
+# never "*", and never allows credentials (the API key travels as a header,
+# not a cookie, so none are needed). The actual app.add_middleware call for
+# this lives at the end of the middleware section, not here -- see the note
+# by block_cross_site_writes for why CORS has to be the outermost middleware.
 
 # Paths that bypass both setup-redirect and auth checks
 _SETUP_BYPASS = {
@@ -1131,14 +1144,43 @@ async def block_cross_site_writes(request: Request, call_next):
     and other reverse proxies the browser's Origin is the proxy host, and
     comparing it against the app's own address would reject every proxied
     install.
+
+    A request carrying a valid X-API-Key is exempt (FoodHub-barcode-bridge):
+    this check exists to stop a cross-site page from riding the browser's
+    *ambient* session cookie, which is exactly what an API key is not -- it is
+    a credential the calling code must deliberately attach, the same reason
+    require_auth() above already treats API-key requests as fully trusted
+    regardless of where they came from. Without this, the one legitimate
+    cross-origin client this app allows (an explicitly allow-listed origin in
+    cors_allowed_origins, e.g. a barcode-scanning page) would be blocked here
+    even after CORS and the API key both check out.
     """
-    if request.method not in _CSRF_SAFE_METHODS:
+    if request.method not in _CSRF_SAFE_METHODS and not _api_key_ok(request):
         if request.headers.get("sec-fetch-site", "") in ("cross-site", "same-site"):
             return JSONResponse(
                 {"detail": "That request came from another site, so it was "
                            "refused. Open Pantry Raider directly and try again."},
                 status_code=403)
     return await call_next(request)
+
+
+# Registered last so it wraps every other middleware here (Starlette runs
+# middleware outer-to-inner in reverse registration order -- the most
+# recently added is outermost). CORS has to be outermost: a preflight OPTIONS
+# request carries no X-API-Key and no session cookie by design, so if
+# require_auth or block_cross_site_writes ran first they would reject it
+# before CORSMiddleware ever got a chance to answer it. Still fully gated on
+# cors_allowed_origins being non-empty -- most installs never set it, and
+# nothing here changes for them.
+if settings.cors_allowed_origins:
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(settings.cors_allowed_origins),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "X-API-Key"],
+    )
 
 
 from pathlib import Path

@@ -533,6 +533,9 @@ _SAVEABLE = [
     # Food Hub (FoodHub-0002)
     "quick_add_mode", "foodhub_calendar_token",
     "device_hostname",
+    # Cross-origin browser allowlist (FoodHub-barcode-bridge): see the
+    # CORSMiddleware comment in main.py for why this normally stays empty.
+    "cors_allowed_origins",
     "qr_url_mode", "qr_public_url",
     "recipe_source", "themealdb_api_key", "spoonacular_api_key",
     "recipes_backend", "shopping_backend",
@@ -1885,6 +1888,16 @@ class Settings(BaseSettings):
     # extra_api_key_names[2] names extra_api_keys[2]). Lets the admin tell keys
     # apart (e.g. "kitchen pi", "pantry scanner"). Missing/short = unnamed.
     extra_api_key_names: list[str] = []
+    # Browser origins allowed to call the API cross-origin, e.g. a Netlify page
+    # doing its own barcode-camera scanning and posting the result straight to
+    # /pending/scan with an X-API-Key header (FoodHub-barcode-bridge, Sept
+    # 2026: the app's own live scanner needs https, and the only https address
+    # here is the tailnet-proxied one, which the login flow treats as an
+    # internet origin and gates behind 2FA -- an external page authenticating
+    # with an API key instead of a session sidesteps that entirely). Empty by
+    # default: see the CORSMiddleware comment in main.py for why cross-origin
+    # access is off unless a specific origin is deliberately allow-listed here.
+    cors_allowed_origins: list[str] = []
     # Whether a new satellite on the LAN may ask this server for its own API
     # key with a short on-screen confirmation code (FoodAssistant-4box). The
     # request endpoints are unauthenticated by design (the device has no key

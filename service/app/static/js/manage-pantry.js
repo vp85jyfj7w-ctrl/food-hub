@@ -488,9 +488,108 @@ function addRecent(listId, html) {
 var _confirmModalEl = null;
 var _confirmBsModal = null;
 var _confirmPending = null; // { code } while the modal is open, else null
+var _confirmCal = null;     // the open modal's calendar controller
+var _confirmDateIso = '';   // the currently chosen date (may be '' = none)
+
+// A real month-grid calendar, not a native <input type="date"> -- Will
+// specifically asked for "an actual calendar to select the right date"
+// rather than whatever the browser's own picker happens to look like (a
+// spinning wheel on iOS, a plain text box with a tiny icon on desktop). It is
+// shown open in the modal already, with no extra tap needed to reveal it.
+var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+                   'July', 'August', 'September', 'October', 'November', 'December'];
+var DOW_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+function isoDate(y, m, d) { return y + '-' + pad2(m + 1) + '-' + pad2(d); }
+function parseIsoDate(iso) {
+  const p = iso.split('-').map(Number);
+  return new Date(p[0], p[1] - 1, p[2]);
+}
+
+function ensureCalendarStyles() {
+  if (document.getElementById('qa-cal-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'qa-cal-styles';
+  style.textContent =
+    '.qa-cal{user-select:none}' +
+    '.qa-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-weight:600}' +
+    '.qa-cal-nav{background:none;border:none;font-size:1.3rem;line-height:1;padding:2px 10px;cursor:pointer;border-radius:6px}' +
+    '.qa-cal-nav:hover{background:#e9ecef}' +
+    '.qa-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}' +
+    '.qa-cal-dow{font-size:.72rem;color:#888;padding:4px 0}' +
+    '.qa-cal-day{padding:7px 0;border-radius:6px;cursor:pointer;font-size:.9rem}' +
+    '.qa-cal-day:hover{background:#e9ecef}' +
+    '.qa-cal-day.qa-muted{color:#c3c7cd;cursor:default}' +
+    '.qa-cal-day.qa-muted:hover{background:none}' +
+    '.qa-cal-day.qa-today{box-shadow:inset 0 0 0 1px #6c757d}' +
+    '.qa-cal-day.qa-selected{background:#198754;color:#fff}';
+  document.head.appendChild(style);
+}
+
+// Builds a month-grid calendar inside `container`. `initialIso` ("" or a
+// YYYY-MM-DD string) is the day to start selected/showing. `onPick(iso)`
+// fires on every tap of a real day in the grid. Returns a small controller
+// so the caller can clear the selection (a "No date" option) without
+// rebuilding the whole thing.
+function buildCalendar(container, initialIso, onPick) {
+  const today = new Date();
+  let sel = initialIso ? parseIsoDate(initialIso) : null;
+  let viewY = (sel || today).getFullYear();
+  let viewM = (sel || today).getMonth();
+
+  function render() {
+    const startDow = (new Date(viewY, viewM, 1).getDay() + 6) % 7; // Monday=0
+    const daysInM = new Date(viewY, viewM + 1, 0).getDate();
+    const prevDays = new Date(viewY, viewM, 0).getDate();
+    let cells = '';
+    for (let i = 0; i < startDow; i++) {
+      cells += '<div class="qa-cal-day qa-muted">' + (prevDays - startDow + 1 + i) + '</div>';
+    }
+    for (let d = 1; d <= daysInM; d++) {
+      let cls = 'qa-cal-day';
+      if (viewY === today.getFullYear() && viewM === today.getMonth() && d === today.getDate()) cls += ' qa-today';
+      if (sel && viewY === sel.getFullYear() && viewM === sel.getMonth() && d === sel.getDate()) cls += ' qa-selected';
+      cells += '<div class="' + cls + '" data-day="' + d + '">' + d + '</div>';
+    }
+    const trailing = (7 - ((startDow + daysInM) % 7)) % 7;
+    for (let n = 1; n <= trailing; n++) cells += '<div class="qa-cal-day qa-muted">' + n + '</div>';
+    container.innerHTML =
+      '<div class="qa-cal">' +
+      '<div class="qa-cal-head">' +
+      '<button type="button" class="qa-cal-nav" data-nav="-1">&lsaquo;</button>' +
+      '<span>' + MONTH_NAMES[viewM] + ' ' + viewY + '</span>' +
+      '<button type="button" class="qa-cal-nav" data-nav="1">&rsaquo;</button>' +
+      '</div><div class="qa-cal-grid">' +
+      DOW_NAMES.map(n => '<div class="qa-cal-dow">' + n + '</div>').join('') +
+      cells + '</div></div>';
+  }
+
+  // Assignment (not addEventListener) so re-opening the modal never stacks a
+  // second listener on the same container.
+  container.onclick = function (ev) {
+    const nav = ev.target.closest('[data-nav]');
+    if (nav) {
+      viewM += parseInt(nav.dataset.nav, 10);
+      if (viewM < 0) { viewM = 11; viewY--; } else if (viewM > 11) { viewM = 0; viewY++; }
+      render();
+      return;
+    }
+    const dayEl = ev.target.closest('.qa-cal-day:not(.qa-muted)');
+    if (dayEl) {
+      const day = parseInt(dayEl.dataset.day, 10);
+      sel = new Date(viewY, viewM, day);
+      onPick(isoDate(viewY, viewM, day));
+      render();
+    }
+  };
+  render();
+  return { clear: function () { sel = null; render(); } };
+}
 
 function ensureConfirmModal() {
   if (_confirmModalEl) return;
+  ensureCalendarStyles();
   const wrap = document.createElement('div');
   wrap.innerHTML =
     '<div class="modal fade" id="quickAddConfirmModal" tabindex="-1" ' +
@@ -498,10 +597,11 @@ function ensureConfirmModal() {
     '<div class="modal-dialog modal-dialog-centered"><div class="modal-content">' +
     '<div class="modal-header"><h5 class="modal-title" id="quickAddConfirmName">Item</h5></div>' +
     '<div class="modal-body">' +
-    '<label for="quickAddConfirmDate" class="form-label">Best-by date</label>' +
-    '<input type="date" id="quickAddConfirmDate" class="form-control">' +
-    '<div class="form-text" id="quickAddConfirmHint"></div>' +
-    '</div>' +
+    '<div id="quickAddCal"></div>' +
+    '<div class="d-flex justify-content-between align-items-start mt-2">' +
+    '<div class="form-text mb-0" id="quickAddConfirmHint"></div>' +
+    '<button type="button" class="btn btn-sm btn-link p-0 flex-shrink-0 ms-2" id="quickAddNoDate">No date</button>' +
+    '</div></div>' +
     '<div class="modal-footer">' +
     '<button type="button" class="btn btn-outline-secondary" id="quickAddConfirmLater">Review later instead</button>' +
     '<button type="button" class="btn btn-success" id="quickAddConfirmBtn">' +
@@ -512,6 +612,10 @@ function ensureConfirmModal() {
   _confirmBsModal = new bootstrap.Modal(_confirmModalEl);
   document.getElementById('quickAddConfirmBtn').addEventListener('click', onQuickAddConfirmed);
   document.getElementById('quickAddConfirmLater').addEventListener('click', onQuickAddDeferred);
+  document.getElementById('quickAddNoDate').addEventListener('click', function () {
+    _confirmDateIso = '';
+    if (_confirmCal) _confirmCal.clear();
+  });
 }
 
 async function confirmAndQuickAdd(code) {
@@ -537,20 +641,21 @@ async function confirmAndQuickAdd(code) {
   }
   ensureConfirmModal();
   _confirmPending = { code };
+  _confirmDateIso = data.best_by_date || '';
   document.getElementById('quickAddConfirmName').textContent = data.name || code;
-  document.getElementById('quickAddConfirmDate').value = data.best_by_date || '';
   document.getElementById('quickAddConfirmHint').textContent = data.best_by_date
-    ? 'Suggested from the product itself -- change it if the pack in your hand differs.'
-    : 'No date could be worked out -- enter the one on the pack, or leave it blank.';
+    ? 'Suggested from the product itself -- tap a different day if the pack in your hand differs.'
+    : 'No date could be worked out -- pick the one on the pack, or leave it blank.';
+  _confirmCal = buildCalendar(document.getElementById('quickAddCal'), _confirmDateIso,
+    function (iso) { _confirmDateIso = iso; });
   showStatus('barcode-status', '', 'info');
   _confirmBsModal.show();
-  setTimeout(() => document.getElementById('quickAddConfirmDate').focus(), 200);
 }
 
 async function onQuickAddConfirmed() {
   if (!_confirmPending) return;
   const code = _confirmPending.code;
-  const dateVal = document.getElementById('quickAddConfirmDate').value || '';
+  const dateVal = _confirmDateIso || '';
   _confirmBsModal.hide();
   _confirmPending = null;
   showStatus('barcode-status',

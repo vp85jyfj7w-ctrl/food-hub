@@ -536,6 +536,10 @@ _SAVEABLE = [
     # Cross-origin browser allowlist (FoodHub-barcode-bridge): see the
     # CORSMiddleware comment in main.py for why this normally stays empty.
     "cors_allowed_origins",
+    # When set, tapping the Stock Up tile on a non-kiosk browser navigates
+    # straight to this URL instead of switching panes in-page (FoodHub-
+    # barcode-bridge). See manage-pantry.js's selectMode() for why.
+    "barcode_bridge_url",
     "qr_url_mode", "qr_public_url",
     "recipe_source", "themealdb_api_key", "spoonacular_api_key",
     "recipes_backend", "shopping_backend",
@@ -1898,6 +1902,11 @@ class Settings(BaseSettings):
     # default: see the CORSMiddleware comment in main.py for why cross-origin
     # access is off unless a specific origin is deliberately allow-listed here.
     cors_allowed_origins: list[str] = []
+    # URL of an external barcode-scanning page (FoodHub-barcode-bridge, e.g.
+    # foodhub-scan-bridge.netlify.app) that the Stock Up tile sends a
+    # non-kiosk browser to instead of switching panes in-page. Empty by
+    # default -- Stock Up behaves exactly as upstream until this is set.
+    barcode_bridge_url: str = ""
     # Whether a new satellite on the LAN may ask this server for its own API
     # key with a short on-screen confirmation code (FoodAssistant-4box). The
     # request endpoints are unauthenticated by design (the device has no key

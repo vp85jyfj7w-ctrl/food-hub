@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Calendar: {{ app_name }}{% endblock %}
+{% block content %}
+<style>
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-cell { min-height: 84px; border: 1px solid var(--bs-border-color); border-radius: 6px;
+              padding: 4px; font-size: 0.78rem; overflow: hidden; }
+  .cal-cell.today { border-color: var(--bs-primary); border-width: 2px; }
+  .cal-cell.other-month { opacity: 0.35; }
+  .cal-daynum { font-weight: 600; }
+  .cal-item { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+              border-radius: 4px; padding: 0 3px; margin-top: 2px; }
+  .cal-item.expired { background: var(--bs-danger-bg-subtle, #4d1010); }
+  .cal-item.today-item { background: var(--bs-warning-bg-subtle, #4d3a10); }
+  .cal-item.ok { background: var(--bs-secondary-bg, #2a2a2a); }
+  /* Mobile pass (FoodHub-0002 Phase 9): a phone-width viewport has no room
+     for 7 columns at the desktop cell size, so shrink the grid rather than
+     let it overflow the page horizontally -- the day-of-week header still
+     lines up 1:1 with the grid below it either way. */
+  @media (max-width: 480px) {
+    .cal-grid { gap: 2px; }
+    .cal-cell { min-height: 56px; padding: 2px; font-size: 0.68rem; }
+    .cal-item { padding: 0 2px; margin-top: 1px; }
+  }
+</style>
+
+<div class="d-flex justify-content-between align-items-center my-3 flex-wrap gap-2">
+  <h4 class="mb-0"><i class="bi bi-calendar3 me-2"></i>Expiry Calendar</h4>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary btn-sm" onclick="calShift(-1)"><i class="bi bi-chevron-left"></i></button>
+    <span class="fw-semibold align-self-center" id="calLabel"></span>
+    <button class="btn btn-outline-secondary btn-sm" onclick="calShift(1)"><i class="bi bi-chevron-right"></i></button>
+    <button class="btn btn-outline-secondary btn-sm" onclick="calShift(0, true)">Today</button>
+  </div>
+</div>
+
+<div id="calAlert" class="alert alert-warning d-none" role="alert"></div>
+<div class="cal-grid mb-2" id="calDowRow"></div>
+<div class="cal-grid" id="calGrid"></div>
+
+<div class="card mt-4">
+  <div class="card-body">
+    <h6 class="card-title"><i class="bi bi-rss me-1"></i>Subscribe from your phone/desktop calendar</h6>
+    <p class="text-secondary small mb-2">
+      A read-only feed of everything with a best-by date, regenerated fresh every time your calendar
+      app checks it -- consumed or wasted items simply stop appearing. Anyone with this URL can see
+      what is expiring, so treat it like a password: only share it with your own devices, and
+      regenerate it if a copy ever leaks.
+    </p>
+    <div class="input-group input-group-sm" style="max-width:640px">
+      <input type="text" class="form-control" id="icsUrl" readonly>
+      <button class="btn btn-outline-secondary" onclick="copyIcsUrl()"><i class="bi bi-clipboard"></i></button>
+      <button class="btn btn-outline-secondary" onclick="regenerateToken()">Regenerate</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let calCursor = new Date();
+calCursor.setDate(1);
+
+function esc(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+}
+
+function calShift(months, toToday) {
+  if (toToday) { calCursor = new Date(); calCursor.setDate(1); }
+  else calCursor.setMonth(calCursor.getMonth() + months);
+  renderCalendar();
+}
+
+async function renderCalendar() {
+  const dowRow = document.getElementById('calDowRow');
+  dowRow.innerHTML = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+    .map(d => `<div class="fw-semibold text-center small">${d}</div>`).join('');
+
+  const year = calCursor.getFullYear(), month = calCursor.getMonth();
+  document.getElementById('calLabel').textContent =
+    calCursor.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+
+  const firstOfMonth = new Date(year, month, 1);
+  const startOffset = firstOfMonth.getDay();
+  const gridStart = new Date(year, month, 1 - startOffset);
+  const gridEnd = new Date(gridStart); gridEnd.setDate(gridStart.getDate() + 41); // 6 weeks
+
+  const fmt = d => d.toISOString().slice(0, 10);
+  let data = {};
+  const alertEl = document.getElementById('calAlert');
+  try {
+    const r = await fetch(`foodhub/calendar?from=${fmt(gridStart)}&to=${fmt(gridEnd)}`);
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    data = await r.json();
+    alertEl.classList.add('d-none');
+  } catch (e) {
+    alertEl.textContent = 'Could not load expiry data: ' + e.message;
+    alertEl.classList.remove('d-none');
+  }
+
+  const todayStr = fmt(new Date());
+  const grid = document.getElementById('calGrid');
+  let html = '';
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart); d.setDate(gridStart.getDate() + i);
+    const key = fmt(d);
+    const items = data[key] || [];
+    const classes = ['cal-cell'];
+    if (key === todayStr) classes.push('today');
+    if (d.getMonth() !== month) classes.push('other-month');
+    html += `<div class="${classes.join(' ')}">
+      <div class="cal-daynum">${d.getDate()}</div>
+      ${items.slice(0, 3).map(it => `<span class="cal-item ${esc(it.urgency || 'ok')}" title="${esc(it.name)} (${it.amount}${it.unit ? ' ' + esc(it.unit) : ''})">${esc(it.name)}</span>`).join('')}
+      ${items.length > 3 ? `<span class="text-secondary small">+${items.length - 3} more</span>` : ''}
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+// Absolute base for the feed URL. ingress_path carries the HA Ingress prefix
+// (empty outside HA), matching the same <base href> every page already sets
+// (see ingress.py); a plain window.location.origin would drop that prefix.
+const FOODHUB_ORIGIN = window.location.origin + {{ ingress_path | tojson }};
+
+async function loadIcsUrl() {
+  const hasToken = {{ has_calendar_token | tojson }};
+  if (!hasToken) {
+    document.getElementById('icsUrl').value = 'Click Regenerate to create a subscription link';
+    return;
+  }
+  // The token itself is never re-shown just by loading the page (it's a
+  // secret): a fresh Regenerate is required to see/copy the current URL. This
+  // keeps the page load itself from being a way to read out the token.
+  document.getElementById('icsUrl').value =
+    FOODHUB_ORIGIN + '/foodhub/calendar/expiry.ics?token=(click Regenerate to reveal)';
+}
+
+async function regenerateToken() {
+  if (!confirm('This invalidates any calendar subscription already set up elsewhere. Continue?')) return;
+  try {
+    const r = await fetch('foodhub/calendar/token/regenerate', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.statusText);
+    document.getElementById('icsUrl').value =
+      FOODHUB_ORIGIN + '/foodhub/calendar/expiry.ics?token=' + d.token;
+  } catch (e) {
+    alert('Could not regenerate the calendar link: ' + e.message);
+  }
+}
+
+function copyIcsUrl() {
+  const el = document.getElementById('icsUrl');
+  el.select();
+  navigator.clipboard?.writeText(el.value).catch(() => {});
+}
+
+renderCalendar();
+loadIcsUrl();
+</script>
+{% endblock %}

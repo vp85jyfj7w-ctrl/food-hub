@@ -78,6 +78,8 @@ PINNED = {
             'background_file',
             'background_image_url', 'background_opacity', 'backup_include_secrets', 'barcode_autocheck_shopping',
             'barcode_enrichment', 'barcode_global_capture', 'barcode_llm_fallback',
+            # Added after the pin: "Scan Next Item" quick-add toggle (Food Hub).
+            'quick_add_mode',
             # Added after the pin: the optional Beszel monitoring hub link on the
             # Resources pane (FoodAssistant-4kz2).
             'beszel_enabled', 'beszel_url',
@@ -323,6 +325,8 @@ PINNED = {
             'background_file',
             'background_image_url', 'background_opacity', 'backup_include_secrets', 'barcode_autocheck_shopping',
             'barcode_enrichment', 'barcode_global_capture', 'barcode_llm_fallback',
+            # Added after the pin: "Scan Next Item" quick-add toggle (Food Hub).
+            'quick_add_mode',
             # Added after the pin: the optional Beszel monitoring hub link on the
             # Resources pane (FoodAssistant-4kz2).
             'beszel_enabled', 'beszel_url',
@@ -589,6 +593,8 @@ PINNED = {
             'background_file', 'background_image_url',
             'background_opacity', 'backup_include_secrets', 'barcode_autocheck_shopping', 'barcode_enrichment',
             'barcode_global_capture', 'barcode_llm_fallback',
+            # Added after the pin: "Scan Next Item" quick-add toggle (Food Hub).
+            'quick_add_mode',
             # Added after the pin: the optional Beszel monitoring hub link on the
             # Resources pane (FoodAssistant-4kz2). Both fields are server-managed
             # (SATELLITE_PULL_FIELDS) and render read-only on a satellite, but the

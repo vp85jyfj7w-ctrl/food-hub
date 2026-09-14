@@ -129,6 +129,11 @@ class PendingItem(Base):
     # this. The UI shows "Saved, looking up..." while it is set. Added after
     # release: database.ensure_schema() backfills the column (default 0).
     enriching = Column(Integer, default=0)
+    # Food Hub (FoodHub-0002): optional "Bought From" retailer, set from the
+    # review screen or auto-stamped from an active ShoppingSession. NULL is
+    # the normal case (retailer is never required to commit an item). Added
+    # after release: database.ensure_schema() backfills the column.
+    retailer_id = Column(Integer, ForeignKey("foodhub_retailers.id"), nullable=True)
     source = Column(String, default="scanner")     # scanner | ha | esp32 | manual
     created_at = Column(
         String, default=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -278,6 +283,70 @@ class RecipeStep(Base):
     recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False, index=True)
     position = Column(Integer, nullable=False, default=0)
     text = Column(Text, nullable=False)
+
+
+class Retailer(Base):
+    """A shop the household buys from (Food Hub, FoodHub-0002).
+
+    Food Hub-owned table, namespaced foodhub_* so it is obviously additive on
+    an upstream merge (see FOODHUB_CHANGES.md). Rows are never hard-deleted
+    from the UI: ``active=0`` soft-hides a retailer from pickers while
+    preserving its history in ProductRetailer/ShoppingSession, exactly like
+    other soft-hide fields in this codebase (e.g. StreamDeckProfile is
+    deleted outright, but a *picker* option follows the active-flag pattern
+    used for nav tabs and custom themes elsewhere in config.py).
+    """
+    __tablename__ = "foodhub_retailers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True, index=True)
+    sort_order = Column(Integer, default=0)
+    active = Column(Integer, default=1)
+
+
+class ProductRetailer(Base):
+    """Remembers which retailer a barcode/product is usually bought from
+    (Food Hub, FoodHub-0002).
+
+    One row per (barcode or grocy_product_id) x retailer pair: a product
+    bought from two shops over time gets two rows, and ``times_seen`` /
+    ``last_seen`` on each let the "suggest a retailer" lookup return whichever
+    is more likely (most recently seen wins ties). Keyed by barcode when one
+    is known (barcode survives a product being re-created in Grocy) and by
+    grocy_product_id when it is not (e.g. a receipt-only import with no
+    barcode). Both are nullable because either identity alone is enough to
+    match; a row is only ever written with at least one set.
+    """
+    __tablename__ = "foodhub_product_retailers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    barcode = Column(String, nullable=True, index=True)
+    grocy_product_id = Column(Integer, nullable=True, index=True)
+    retailer_id = Column(Integer, ForeignKey("foodhub_retailers.id"), nullable=False, index=True)
+    times_seen = Column(Integer, default=1)
+    last_seen = Column(
+        String, default=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds")
+    )
+
+
+class ShoppingSession(Base):
+    """One "shopping trip" at a single retailer (Food Hub, FoodHub-0002).
+
+    Only ever one active session (finished_at is NULL) at a time; starting a
+    new one while another is open finishes the old one first (see
+    services/shopping_session.py). While active, every stock-up commit is
+    auto-tagged with this session's retailer via ProductRetailer, so a whole
+    trip's items are tagged without picking a retailer per item.
+    """
+    __tablename__ = "foodhub_shopping_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    retailer_id = Column(Integer, ForeignKey("foodhub_retailers.id"), nullable=False)
+    started_at = Column(
+        String, default=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds")
+    )
+    finished_at = Column(String, nullable=True)
+    item_count = Column(Integer, default=0)
 
 
 class IntakeLog(Base):

@@ -215,7 +215,8 @@ def test_default_tree_groups_secondary_tabs_under_parents(monkeypatch):
         assert key not in top, f"{key} should be nested, not top-level"
 
     # Children follow the flat NAV_TABS registration order within each parent.
-    assert children["inventory"] == ["expiring"]
+    # Food Hub (FoodHub-0002) nests its Calendar tab under Inventory too.
+    assert children["inventory"] == ["expiring", "foodhub_calendar"]
     assert children["cook"] == ["recipes", "current_recipe", "mealplan"]
     assert children["guide"] == ["nutrition", "convert", "shop"]
     assert children["timetemp"] == ["tt_both", "tt_timers", "tt_thermo"]

@@ -11,9 +11,10 @@ from .database import engine, ensure_schema, get_db, Base
 from .ingress import ingress_redirect
 from .models import db_models  # noqa: F401 - registers models with Base
 from .services.defaults import seed_defaults
+from .services.foodhub_retailers import seed_retailers
 from .services.diagnostics import configure_console_logging
 from .services import pairing as pairing_svc
-from .routers import analyze, defaults, inventory, expiring, ui, setup, pending, mealie, admin, qr, tunnel, grocy, satellite, proxy, devices, current_recipe, events, action_items, nutrition, audit, affiliate, printing, cook_wizard, recipes, gadgets, pairing, ha, cub, kiosk_status, receipt
+from .routers import analyze, defaults, inventory, expiring, ui, setup, pending, mealie, admin, qr, tunnel, grocy, satellite, proxy, devices, current_recipe, events, action_items, nutrition, audit, affiliate, printing, cook_wizard, recipes, gadgets, pairing, ha, cub, kiosk_status, receipt, foodhub
 
 # uvicorn wires handlers only for its own loggers, so the app's INFO lines
 # (first-boot provisioning, the readiness gate, background tasks) used to be
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI):
     db = next(get_db())
     try:
         seed_defaults(db)
+        seed_retailers(db)  # Food Hub (FoodHub-0002)
     finally:
         db.close()
     # Sync the kiosk display idle timeout to the host bridge on boot so a bridge
@@ -1196,6 +1198,7 @@ app.include_router(ha.router)
 app.include_router(cub.router)
 app.include_router(kiosk_status.router)
 app.include_router(receipt.router)
+app.include_router(foodhub.router)  # Food Hub (FoodHub-0002)
 
 
 @app.get("/")

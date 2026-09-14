@@ -11,6 +11,10 @@
 var _mpConfig = (document.getElementById('manage-pantry-config') || {}).dataset || {};
 // Cache-buster for the lazily fetched camera decoder below.
 var APP_VERSION = _mpConfig.version || '';
+// Food Hub "Scan Next Item" (brief 3.2): when on, an Inventory-mode scan that
+// matches a known barcode commits straight to Grocy and the camera keeps
+// rolling for the next item, instead of stopping after every single scan.
+var QUICK_ADD_MODE = _mpConfig.quickAddMode === '1';
 
 // The camera decoder is 367 KB, and only two actions ever touch it: decoding
 // a photo of a barcode, and running the live camera scanner. It used to be
@@ -299,6 +303,25 @@ function handleScanResult(code, result) {
     case 'merged':
       showInventoryResult(result);
       break;
+    case 'instant_added': {
+      // Food Hub "Scan Next Item": committed straight to Grocy, no pending
+      // row was ever created, so this skips showInventoryResult/trackLiveScan
+      // (both key off a pending id) and appends its own row to the same
+      // on-screen recent-scans list instead.
+      const name = (result.item && result.item.name) || code;
+      showStatus('barcode-status',
+        `<i class="bi bi-lightning-charge-fill text-success me-1"></i>Added straight to stock: <strong>${esc(name)}</strong>`,
+        'success');
+      liveScans.set(`instant-${Date.now()}-${code}`, { barcode: code, name, enriching: false, failed: false });
+      renderLiveScans();
+      _barcodeSavedCount++;
+      { const badge = document.getElementById('barcode-saved-badge');
+        const wrap = document.getElementById('barcode-saved-count');
+        if (badge) badge.textContent = _barcodeSavedCount;
+        if (wrap) wrap.classList.remove('d-none'); }
+      refreshPendingBadge();
+      break;
+    }
     case 'consumed':
       showStatus(result.message ? paneStatusId : 'consume-status',
         result.message ? esc(result.message)
@@ -632,7 +655,12 @@ async function startScanner() {
       },
     },
     (decodedText) => {
-      stopScanner();
+      // Quick Add keeps the camera rolling in Inventory mode so a shelf of
+      // items can be scanned back-to-back without re-tapping Start each time;
+      // every other mode/setting keeps the original stop-after-each-scan
+      // behavior unchanged.
+      const keepScanning = QUICK_ADD_MODE && currentMode === 'inventory';
+      if (!keepScanning) stopScanner();
       submitScan(decodedText);
     },
     () => {}

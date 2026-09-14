@@ -484,7 +484,8 @@
      div carries the only two server-rendered values the script needs. -->
 <div id="manage-pantry-config"
      data-printing="{{ '1' if printing_enabled else '0' }}"
-     data-version="{{ app_version }}" hidden></div>
+     data-version="{{ app_version }}"
+     data-quick-add-mode="{{ '1' if quick_add_mode else '0' }}" hidden></div>
 {# defer is load-bearing: this script subscribes to window.PRKioskStatus at
    load time, and kiosk-status.js in the head is deferred (base.html), so a
    plain end-of-body script would run first, find no PRKioskStatus, and fall

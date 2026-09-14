@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Retailers: {{ app_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center my-3">
+  <h4 class="mb-0"><i class="bi bi-shop me-2"></i>Retailers</h4>
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal">
+    <i class="bi bi-plus-lg me-1"></i>Add Retailer
+  </button>
+</div>
+
+<p class="text-secondary small">
+  Where you buy from (Food Hub). Optional everywhere it appears: nothing here is
+  required to scan or add an item. "Bought From" on the Review page and a
+  Shopping Session both use this list; hiding a retailer keeps its purchase
+  history but removes it from those pickers.
+</p>
+
+{% if message %}
+<div class="alert alert-{{ message_type }}">{{ message }}</div>
+{% endif %}
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle" id="retailersTable">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Sort order</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in retailers %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.sort_order }}</td>
+        <td>
+          {% if row.active %}<span class="badge text-bg-success">Active</span>
+          {% else %}<span class="badge text-bg-secondary">Hidden</span>{% endif %}
+        </td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-secondary btn-icon me-1"
+                  data-edit-retailer
+                  data-id="{{ row.id }}"
+                  data-name="{{ row.name }}"
+                  data-sort="{{ row.sort_order }}"
+                  data-active="{{ '1' if row.active else '' }}"
+                  title="Edit">
+            <i class="bi bi-pencil"></i>
+          </button>
+          <form method="post" action="ui/retailers/{{ row.id }}/delete" class="d-inline"
+                onsubmit="return confirm('Delete this retailer? Its purchase history stays, but it will no longer be listed anywhere. Hiding it instead keeps it out of pickers without deleting it.')">
+            <button type="submit" class="btn btn-sm btn-outline-danger btn-icon" title="Delete">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-center text-secondary py-4">No retailers yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="ui/retailers/create">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Retailer</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" name="name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Sort order</label>
+            <input type="number" name="sort_order" class="form-control" value="0">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" id="editRetailerForm" action="">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Retailer</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" name="name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Sort order</label>
+            <input type="number" name="sort_order" class="form-control">
+          </div>
+          <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="editRetailerActive" name="active" value="1">
+            <label class="form-check-label" for="editRetailerActive">Active (shown in pickers)</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('click', function (ev) {
+  const btn = ev.target.closest('[data-edit-retailer]');
+  if (!btn) return;
+  const d = btn.dataset;
+  const form = document.getElementById('editRetailerForm');
+  form.action = `ui/retailers/${d.id}/update`;
+  form.querySelector('[name=name]').value = d.name || '';
+  form.querySelector('[name=sort_order]').value = d.sort || 0;
+  document.getElementById('editRetailerActive').checked = !!d.active;
+  new bootstrap.Modal(document.getElementById('editModal')).show();
+});
+</script>
+{% endblock %}

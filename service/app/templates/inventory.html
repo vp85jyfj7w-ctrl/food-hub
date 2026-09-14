@@ -288,6 +288,14 @@ function renderPanel(panelId, countId, items, bucket) {
               onclick="consume(${item.product_id}, ${item.amount}, '${esc(item.name)}')">
         <i class="bi bi-check2"></i>
       </button>
+      <!-- Food Hub (FoodHub-0002, brief 3.3): the Expiring page already has a
+           grouped Used/Wasted pair (Consume + "Toss it", same
+           expiring/toss/{id} endpoint); Inventory only had Used. This adds
+           Wasted here too so both pages offer the same tri-action set. -->
+      <button class="btn btn-outline-secondary btn-icon" title="Toss (wasted, not eaten)"
+              onclick="tossItem(${item.product_id}, ${item.amount}, '${esc(item.name)}')">
+        <i class="bi bi-trash"></i>
+      </button>
       ${PRINTING_ENABLED ? `
       <button class="btn btn-outline-secondary btn-icon" title="Print label"
               onclick="printLabel(${item.product_id}, '${esc(item.name)}')">
@@ -516,6 +524,34 @@ async function consume(productId, amount, name) {
     });
   } catch(e) {
     showToast(`Error: ${e.message}`, true);
+  }
+}
+
+// Toss it (Food Hub, FoodHub-0002): records the amount as spoiled rather
+// than eaten, via the same expiring/toss/{id} endpoint the Expiring page's
+// "Toss it" button already uses (services/waste.py's summary reads its log
+// either way, so Inventory tosses show up in that summary too).
+async function tossItem(productId, amount, name) {
+  if (!confirm(`Toss all ${name} as wasted? This removes it from your stock and is recorded as spoiled, not eaten.`)) return;
+  try {
+    const r = await fetch(`/expiring/toss/${productId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.detail || r.statusText);
+    const row = document.getElementById(`row-${productId}`);
+    if (row) row.remove();
+    showToast(`Tossed: ${name}`);
+    PANEL_KEYS.forEach(b => {
+      const panel = document.getElementById(`panel-${b}`);
+      const rows = panel.querySelectorAll('.item-row').length;
+      if (rows === 0) renderPanel(`panel-${b}`, `count-${b}`, []);
+      else document.getElementById(`count-${b}`).textContent = rows;
+    });
+  } catch (e) {
+    showToast(`Could not toss ${name}: ${e.message}`, true);
   }
 }
 

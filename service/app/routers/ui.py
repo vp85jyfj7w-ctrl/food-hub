@@ -13,7 +13,7 @@ from ..passwords import verify_secret, looks_hashed
 from .. import totp as local_totp
 from ..database import get_db
 from ..ingress import ingress_path, ingress_redirect
-from ..models.db_models import ExpiryDefault
+from ..models.db_models import ExpiryDefault, Retailer
 from ..services.grocy import GrocyClient, error_payload
 from ..services.request_origin import is_internet_origin, has_forwarding_headers
 from ..storage_categories import all_categories, OTHER
@@ -747,6 +747,80 @@ def update_default(
         row.notes = notes or None
         db.commit()
     return ingress_redirect(request, "/ui/defaults?msg=Rule+updated.")
+
+
+@router.get("/foodhub/calendar", response_class=HTMLResponse)
+async def foodhub_calendar_page(request: Request):
+    """Expiry calendar (Food Hub, FoodHub-0002, brief 3.7). The page itself is
+    static markup + a month grid built by its own JS calling GET
+    /foodhub/calendar; no data is fetched server-side here, so there is
+    nothing for this route to keep in sync."""
+    return templates.TemplateResponse(request, "foodhub_calendar.html", {
+        "request": request,
+        "active": "foodhub_calendar",
+        "has_calendar_token": bool(settings.foodhub_calendar_token),
+    })
+
+
+@router.get("/retailers", response_class=HTMLResponse)
+def retailers_page(request: Request, db: Session = Depends(get_db)):
+    """Manage the retailer list (Food Hub, FoodHub-0002, brief 3.4): add,
+    rename, reorder, soft-hide. Mirrors the existing Expiry Defaults page's
+    server-rendered form pattern rather than the JSON API in routers/foodhub.py
+    (that API is for the scan/receipt flows; this page is for a person)."""
+    rows = db.query(Retailer).order_by(Retailer.sort_order, Retailer.name).all()
+    return templates.TemplateResponse(request, "retailers.html", {
+        "request": request,
+        "retailers": rows,
+        "active": "foodhub_retailers",
+        "message": request.query_params.get("msg"),
+        "message_type": request.query_params.get("msg_type", "success"),
+    })
+
+
+@router.post("/retailers/create")
+def create_retailer_ui(
+    request: Request,
+    name: str = Form(...),
+    sort_order: int = Form(0),
+    db: Session = Depends(get_db),
+):
+    name = name.strip()
+    if name and not db.query(Retailer).filter(Retailer.name == name).first():
+        db.add(Retailer(name=name, sort_order=sort_order, active=1))
+        db.commit()
+        return ingress_redirect(request, "/ui/retailers?msg=Retailer+added.")
+    return ingress_redirect(
+        request,
+        "/ui/retailers?msg=That+retailer+already+exists+or+the+name+was+blank.&msg_type=warning",
+    )
+
+
+@router.post("/retailers/{retailer_id}/update")
+def update_retailer_ui(
+    request: Request,
+    retailer_id: int,
+    name: str = Form(...),
+    sort_order: int = Form(0),
+    active: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    row = db.query(Retailer).filter(Retailer.id == retailer_id).first()
+    if row:
+        row.name = name.strip() or row.name
+        row.sort_order = sort_order
+        row.active = 1 if active else 0
+        db.commit()
+    return ingress_redirect(request, "/ui/retailers?msg=Retailer+updated.")
+
+
+@router.post("/retailers/{retailer_id}/delete")
+def delete_retailer_ui(request: Request, retailer_id: int, db: Session = Depends(get_db)):
+    row = db.query(Retailer).filter(Retailer.id == retailer_id).first()
+    if row:
+        db.delete(row)
+        db.commit()
+    return ingress_redirect(request, "/ui/retailers?msg=Retailer+deleted.&msg_type=warning")
 
 
 @router.get("/convert", response_class=HTMLResponse)

@@ -144,6 +144,12 @@ def theme_context(request: Request) -> dict:
         # affordances with {% if not demo_mode %}. False on any normal install,
         # so the banner is absent and nothing else changes.
         "demo_mode": settings.demo_mode,
+        # Food Hub (FoodHub-0002): "Scan Next Item" (brief 3.2). Only the
+        # Manage page's camera-scanner JS reads this, but every other
+        # settings-derived flag on this page is exposed the same
+        # (global, not per-route) way, so this follows suit rather than
+        # threading it through routers/ui.py's add_page() alone.
+        "quick_add_mode": settings.quick_add_mode,
     }
 
 

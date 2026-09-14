@@ -72,6 +72,37 @@
 const CATEGORIES = ['Poultry','Meat','Seafood','Dairy','Produce','Grains','Condiments','Beverages','Snacks','Frozen','Canned','Other'];
 const STORAGES = {refrigerated:'Refrigerated', frozen:'Frozen', room_temp:'Room Temp', dry:'Dry'};
 
+// Food Hub (FoodHub-0002): retailers for the "Bought From" selector, loaded
+// once. A failed fetch just leaves the picker showing "Bought From..." with
+// no options rather than breaking the review page over an optional field.
+let RETAILERS = [];
+async function loadRetailers() {
+  try {
+    const r = await fetch('foodhub/retailers');
+    if (r.ok) RETAILERS = await r.json();
+  } catch (e) { /* optional field: fail quiet */ }
+}
+
+function retailerOptions(selectedId) {
+  const sel = selectedId || '';
+  return '<option value="">Bought from…</option>' + RETAILERS.map(r =>
+    `<option value="${r.id}" ${String(r.id) === String(sel) ? 'selected' : ''}>${esc(r.name)}</option>`
+  ).join('');
+}
+
+// Today/Tomorrow/+2/+3 quick-pick chips (brief 3.2): compute the date
+// client-side and save it through the same patchItem() path as typing in the
+// date field, so "manual always wins" and the learning system see exactly
+// the same edit either way.
+function quickPickDate(id, days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const iso = d.toISOString().slice(0, 10);
+  const el = document.getElementById(`pending-date-${id}`);
+  if (el) el.value = iso;
+  patchItem(id, 'best_by_date', iso, el);
+}
+
 function esc(s) {
   return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 }
@@ -172,6 +203,24 @@ async function loadPending() {
             </button>
           </div>
         </div>
+        <div class="mt-1 ms-1 d-flex align-items-center gap-2 flex-wrap">
+          <!-- Food Hub (FoodHub-0002, brief 3.2): expiry quick-picks. A click
+               here is the same PATCH the date field's onchange sends, so a
+               later manual edit still always wins over these, exactly as
+               it already does over a scanned/AI-suggested date. -->
+          <div class="btn-group btn-group-sm" role="group" aria-label="Quick-pick a best-by date">
+            <button type="button" class="btn btn-outline-secondary" onclick="quickPickDate(${item.id}, 0)">Today</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="quickPickDate(${item.id}, 1)">Tomorrow</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="quickPickDate(${item.id}, 2)">+2d</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="quickPickDate(${item.id}, 3)">+3d</button>
+          </div>
+          <select class="form-select form-select-sm" style="width:auto"
+                  id="pending-retailer-${item.id}"
+                  title="Which shop this was bought from (optional)"
+                  onchange="patchItem(${item.id}, 'retailer_id', this.value ? parseInt(this.value, 10) : 0, this)">
+            ${retailerOptions(item.retailer_id)}
+          </select>
+        </div>
         ${item.duplicate ? `
         <div class="mt-1 ms-1">
           <span class="badge text-bg-info" title="This product already has stock in your inventory. You can still add it; scanned on a different day it lands as a separate entry so each keeps its own expiration.">
@@ -209,6 +258,43 @@ async function loadPending() {
       </div>
     </div>
   `).join('');
+  suggestRetailersFor(items);
+}
+
+// Food Hub (FoodHub-0002, Phase 4): pre-fill "Bought From" from purchase
+// history the first time a row is shown, so a repeat buy needs no typing.
+// Never overrides a retailer already set (by a previous suggestion, a scan
+// during an active Shopping Session, or the user's own pick), and a lookup
+// failure just leaves the field on "Bought from..." -- this is a quiet
+// convenience, never something that can break the review page.
+async function suggestRetailersFor(items) {
+  for (const item of items) {
+    if (item.retailer_id || !item.barcode) continue;
+    let suggestion;
+    try {
+      const r = await fetch(`foodhub/retailers/suggest?barcode=${encodeURIComponent(item.barcode)}`);
+      if (!r.ok) continue;
+      suggestion = (await r.json()).suggestion;
+    } catch (e) { continue; /* optional field: fail quiet */ }
+    if (!suggestion) continue;
+    const sel = document.getElementById(`pending-retailer-${item.id}`);
+    // Only apply if the row is still showing the placeholder: the user (or a
+    // faster suggestion for the same row) may have already set it while this
+    // fetch was in flight.
+    if (sel && !sel.value) {
+      sel.value = String(suggestion.retailer_id);
+      // A plain fetch, not patchItem(): patchItem toasts on failure, which is
+      // right for a field the user just touched but wrong for a background
+      // courtesy fill they never asked for -- if this PATCH fails, the select
+      // already shows the suggestion and a manual save (e.g. re-picking it)
+      // still works normally.
+      fetch(`pending/${item.id}`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ retailer_id: suggestion.retailer_id }),
+      }).catch(() => {});
+    }
+  }
 }
 
 async function patchItem(id, field, value, el) {
@@ -444,6 +530,7 @@ async function saveLeftover(it) {
 loadActionItems();
 setInterval(() => { if (!document.hidden) loadActionItems(); }, 30000);
 
+loadRetailers();
 loadPending();
 // Headless scanners add items while this page is open, so keep it fresh. A
 // hidden tab skips the refresh and catches up as soon as it is shown again.

@@ -9,7 +9,7 @@
 {% macro photo_source_fields() -%}
   <div class="mt-3 border-top pt-2">
     <div class="d-flex align-items-center gap-2 mb-2">
-      <label class="form-label small mb-0" for="photo_source">Photo source{{ info('Where the slideshow photos come from. Google Photos and iCloud do not offer reliable access for third-party apps; point Pantry Raider at an Immich album, a folder, or image links instead.') }}</label>
+      <label class="form-label small mb-0" for="photo_source">Photo source{{ info('Where the slideshow photos come from. Google Photos and iCloud do not offer reliable access for third-party apps; point {{ app_name }} at an Immich album, a folder, or image links instead.') }}</label>
       <select class="form-select form-select-sm" style="max-width:240px" id="photo_source" onchange="photoSourceChanged()">
         <option value="built-in" {{ 'selected' if s.photo_source == 'built-in' or not s.photo_source else '' }}>USB drive (built-in)</option>
         <option value="folder" {{ 'selected' if s.photo_source == 'folder' else '' }}>Folder on this server</option>

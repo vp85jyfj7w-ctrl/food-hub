@@ -243,6 +243,9 @@ class SetupPayload(BaseModel):
     scanner_uart_port: str = "/dev/serial0"
     scanner_uart_baud: int = 9600
     barcode_global_capture: bool = True
+    # "Scan Next Item" (Food Hub, brief 3.2): off by default, same
+    # exclude_unset contract as barcode_global_capture above.
+    quick_add_mode: bool = False
     quiet_mode: bool = False
     barcode_enrichment: str = "llm"
     enrich_provider: str = ""

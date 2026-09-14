@@ -25,6 +25,10 @@ NAV_TABS = [
     # tab: it is reached from Manage. The /ui/audit page still works by URL.
     {"key": "inventory", "label": "Inventory", "icon": "bi-grid",            "href": "ui/inventory"},
     {"key": "expiring",  "label": "Expiring",  "icon": "bi-clock-history",   "href": "ui/expiring"},
+    # Food Hub (FoodHub-0002, brief section 3.7/31): a calendar view over the
+    # same live Grocy expiry data Expiring already reads -- no new database
+    # table, so it can never drift out of sync with a consume/waste/date edit.
+    {"key": "foodhub_calendar", "label": "Calendar", "icon": "bi-calendar3", "href": "ui/foodhub/calendar"},
     {"key": "add",       "label": "Manage",    "icon": "bi-plus-circle",     "href": "ui/add"},
     {"key": "pending",   "label": "Review",    "icon": "bi-inbox",           "href": "ui/pending"},
     # Cook (top) -> Cook, Recipes, On the Line, Meal Plan. Built in, so no
@@ -56,6 +60,9 @@ NAV_TABS = [
     {"key": "camera",    "label": "Cameras",   "icon": "bi-camera-video",    "href": "ui/camera",   "requires": "cameras"},
     # Reference pages: never in the primary row, only in the More menu.
     {"key": "defaults",  "label": "Defaults",  "icon": "bi-table",           "href": "ui/defaults"},
+    # Food Hub (FoodHub-0002, brief section 16/17): manage the retailer list
+    # (add/reorder/soft-hide). A reference page, same tier as Defaults.
+    {"key": "foodhub_retailers", "label": "Retailers", "icon": "bi-shop", "href": "ui/retailers"},
     {"key": "about",     "label": "About",     "icon": "bi-info-circle",     "href": "ui/about"},
 ]
 
@@ -75,6 +82,7 @@ NAV_TABS = [
 # effective_nav_parents().
 DEFAULT_NAV_PARENTS = {
     "expiring": "inventory",
+    "foodhub_calendar": "inventory",
     "recipes": "cook",
     "current_recipe": "cook",
     "mealplan": "cook",

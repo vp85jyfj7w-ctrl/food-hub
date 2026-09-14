@@ -161,7 +161,7 @@
                   <div class="form-control form-control-sm bg-body-tertiary text-secondary">
                     <i class="bi bi-camera-video me-1"></i>{{ cam.host }}{% if cam.port %}:{{ cam.port }}{% endif %} · channel {{ cam.channel if cam.channel is not none else 0 }}{% if cam.username %} · {{ cam.username }}{% endif %} · login kept on the server
                     {% if cam.device_type == 'doorbell' %}<span class="badge bg-secondary ms-1">Doorbell</span>{% endif %}
-                    {% if cam.two_way_talk %}<span class="badge bg-secondary ms-1">Two-way talk capable{{ info('This camera supports two-way audio; Pantry Raider does not open a talk session yet, only the picture and live feed.') }}</span>{% endif %}
+                    {% if cam.two_way_talk %}<span class="badge bg-secondary ms-1">Two-way talk capable{{ info('This camera supports two-way audio; {{ app_name }} does not open a talk session yet, only the picture and live feed.') }}</span>{% endif %}
                   </div>
                 </div>
                 {% if not features.satellite %}

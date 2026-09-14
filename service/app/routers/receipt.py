@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..dependencies import get_vision_provider
 from ..services import action_items, ha_events
+from ..services import foodhub_retailers
 from ..services import receipt as receipt_service
 from ..services import receipt_jobs
 from ..services.grocy import GrocyClient, GrocyError
@@ -248,6 +249,14 @@ async def apply_receipt_prices(body: ApplyRequest, db: Session = Depends(get_db)
     grocy = GrocyClient()
     applied = 0
     failed: list[dict] = []
+    # Food Hub (FoodHub-0002, brief 3.6): tag every product priced from this
+    # receipt with the retailer its OCR'd store name matches, if any. Read
+    # before receipt_jobs.clear() below drops the stored state; a store that
+    # doesn't match a known Retailer (or wasn't read at all) just means no
+    # tagging happens -- applying prices must never depend on retailer
+    # matching succeeding.
+    retailer = foodhub_retailers.match_store_name(
+        db, (receipt_jobs.get_status() or {}).get("store"))
     for pair in body.pairs:
         label = pair.name.strip() or f"product {pair.product_id}"
         if not pair.price or pair.price <= 0:
@@ -267,6 +276,12 @@ async def apply_receipt_prices(body: ApplyRequest, db: Session = Depends(get_db)
                 continue
             await grocy.set_entry_price(entry, pair.price)
             applied += 1
+            if retailer:
+                try:
+                    foodhub_retailers.record_purchase(
+                        db, retailer.id, grocy_product_id=pair.product_id)
+                except Exception:  # noqa: BLE001 - never fail a priced apply over tagging
+                    db.rollback()
         except GrocyError as e:
             failed.append({"name": label, "reason": str(e)})
         except Exception:

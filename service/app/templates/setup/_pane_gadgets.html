@@ -74,7 +74,7 @@
                 <i class="bi bi-info-circle fs-5"></i>
                 <div>
                   The reader runs on the server itself and needs a Bluetooth radio
-                  there. To install it, run this on the server, in your Pantry Raider
+                  there. To install it, run this on the server, in your {{ app_name }}
                   folder:
                   <div class="font-monospace small my-2">sudo ./scripts/image-build/foodassistant-gadgets-setup</div>
                   The <code>gadgets/README.md</code> file in that folder covers the
@@ -119,7 +119,7 @@
           {# ---- WiFi & DIY: ESPHome devices ---- #}
           <div class="gadget-section d-none" id="gadget-sec-wifi">
           {% call panel('From an ESP device',
-                        'DIY WiFi sensors built with ESPHome report straight to Pantry Raider over your network.',
+                        'DIY WiFi sensors built with ESPHome report straight to {{ app_name }} over your network.',
                         pill_text=('On' if s.gadget_esp_enabled else 'Off'),
                         pill_kind=('good' if s.gadget_esp_enabled else 'neutral'),
                         pill_id='gadgets-esp-pill') %}
@@ -409,7 +409,7 @@
                 <div>
                   Plug-in accessories are found by the same reader as the
                   Bluetooth sensors, which runs on the server itself. To
-                  install it, run this on the server, in your Pantry Raider
+                  install it, run this on the server, in your {{ app_name }}
                   folder:
                   <div class="font-monospace small my-2">sudo ./scripts/image-build/foodassistant-gadgets-setup</div>
                 </div>
@@ -431,7 +431,7 @@
                        name="neokey_rest_color" value="{{ s.neokey_rest_color or '#F2006E' }}"
                        aria-label="Resting key color">
                 <button type="button" class="btn btn-outline-secondary btn-sm"
-                        onclick="document.getElementById('neokey_rest_color').value = '#F2006E'">Pantry Raider pink</button>
+                        onclick="document.getElementById('neokey_rest_color').value = '#F2006E'">{{ app_name }} pink</button>
               </div>
             {% endcall %}
             {% call srow('Timer color', 'The countdown bar, and the flash when time is up.',

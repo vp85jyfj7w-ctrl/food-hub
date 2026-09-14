@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Bandit Cubs: Pantry Raider{% endblock %}
+{% block title %}Bandit Cubs: {{ app_name }}{% endblock %}
 
 {% block content %}
 <div class="cubs-page">
@@ -149,7 +149,7 @@
         '<strong>Flashing from the browser needs a secure address.</strong> ' +
         'You are on a plain http address on your network, where browsers block ' +
         'USB flashing. Open this same page over your secure (HTTPS) address, the ' +
-        'one you use to reach Pantry Raider from away from home, then flash from ' +
+        'one you use to reach {{ app_name }} from away from home, then flash from ' +
         'there. The firmware download and command line below work from here as they are.';
     } else {
       banner.className = "alert alert-warning";

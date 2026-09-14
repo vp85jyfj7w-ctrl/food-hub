@@ -72,11 +72,11 @@
           {% elif key == 'pi_hosted' %}
           <div class="icon text-success"><i class="bi bi-house-gear"></i></div>
           <div class="label">Pi Hosted</div>
-          <div class="desc">Everything runs on this Pi: Pantry Raider and Grocy. Works with or without a screen: plug a display in any time to turn it into a kiosk.</div>
+          <div class="desc">Everything runs on this Pi: {{ app_name }} and Grocy. Works with or without a screen: plug a display in any time to turn it into a kiosk.</div>
           {% elif key == 'pi_remote' %}
           <div class="icon text-warning"><i class="bi bi-dpad"></i></div>
           <div class="label">Pi Remote</div>
-          <div class="desc">A control surface only. This device drives a Stream Deck and/or kiosk pointed at a Pantry Raider server already running elsewhere on your network. Runs on a Pi 3.</div>
+          <div class="desc">A control surface only. This device drives a Stream Deck and/or kiosk pointed at a {{ app_name }} server already running elsewhere on your network. Runs on a Pi 3.</div>
           {% endif %}
         </div>
       </div>
@@ -99,7 +99,7 @@
             <i class="bi bi-key me-1"></i>Request access
           </button>
         </div>
-        <div class="form-text">Address of the main Pantry Raider server, no trailing slash.</div>
+        <div class="form-text">Address of the main {{ app_name }} server, no trailing slash.</div>
         <div id="wiz-scan-result" class="small mt-1"></div>
         <div id="wiz-pairing-result" class="small mt-1"></div>
       </div>
@@ -119,7 +119,7 @@
 
     {% if hosted_unavailable %}
     <div class="alert alert-warning py-2 small mb-3">
-      <i class="bi bi-exclamation-triangle me-1"></i>Pi Hosted is hidden because this board has too little memory to run the full stack locally. Use Pi Remote to point it at a Pantry Raider server on your network.
+      <i class="bi bi-exclamation-triangle me-1"></i>Pi Hosted is hidden because this board has too little memory to run the full stack locally. Use Pi Remote to point it at a {{ app_name }} server on your network.
     </div>
     {% endif %}
 
@@ -182,7 +182,7 @@
   <!-- Step 3: Hardware -->
   <div class="wiz-card d-none" id="wiz-step-3">
     <div class="wiz-card-title"><i class="bi bi-cpu text-info me-2"></i>Hardware</div>
-    <div class="wiz-card-sub">Tell Pantry Raider what's connected so it can configure the display and Stream Deck correctly. Skip anything you don't have.</div>
+    <div class="wiz-card-sub">Tell {{ app_name }} what's connected so it can configure the display and Stream Deck correctly. Skip anything you don't have.</div>
 
     {% if hardware_presets %}
     <div class="section-card mb-3">
@@ -296,7 +296,7 @@
   <!-- Step 4: Grocy -->
   <div class="wiz-card d-none" id="wiz-step-4">
     <div class="wiz-card-title"><i class="bi bi-fridge text-info me-2"></i>Inventory</div>
-    <div class="wiz-card-sub">Pantry Raider keeps your stock, locations, and history in its built-in inventory. This step connects to it for you as soon as it answers.</div>
+    <div class="wiz-card-sub">{{ app_name }} keeps your stock, locations, and history in its built-in inventory. This step connects to it for you as soon as it answers.</div>
 
     <div class="section-card mb-3">
       {# Grocy is the inventory engine, configured automatically by the
@@ -632,13 +632,13 @@
     </div>
 
     <!-- Mealie lives under an Advanced disclosure below the cards (matching
-         the Grocy step's style): recipes are built into Pantry Raider, so a
+         the Grocy step's style): recipes are built into {{ app_name }}, so a
          normal first run never needs to see this. It also stays available in
          Settings later. -->
     <details class="mb-3">
       <summary class="small text-secondary">Advanced: connect a Mealie you already run</summary>
       <div class="mt-2" id="mealie-collapse">
-        <p class="text-secondary small">Recipes, the meal plan, and the shopping list are built into Pantry Raider, so most kitchens need nothing here. Already use Mealie? Connect it and your Mealie library keeps working; you can also copy it into Pantry Raider later from Settings.</p>
+        <p class="text-secondary small">Recipes, the meal plan, and the shopping list are built into {{ app_name }}, so most kitchens need nothing here. Already use Mealie? Connect it and your Mealie library keeps working; you can also copy it into {{ app_name }} later from Settings.</p>
         {# Ships hidden and is revealed by panes.js once GET setup/mealie/status
            says Mealie is up: the probe is a docker compose ps that is too slow
            for the page render (FoodAssistant-0hwez). #}
@@ -648,7 +648,7 @@
           <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Mealie is running on this device</span>
           {% if not has.mealie_api_key %}
           <button class="btn btn-outline-info btn-sm" type="button" onclick="firstRunProvision('mealie', this, 'mealie-start-result', val('mealie_base_url'), false)"
-                  title="If Mealie is still on its stock sign-in, Pantry Raider signs in, creates its own API token, secures the account, and adds a Groceries shopping list.">
+                  title="If Mealie is still on its stock sign-in, {{ app_name }} signs in, creates its own API token, secures the account, and adds a Groceries shopping list.">
             <i class="bi bi-stars me-1"></i>Set up for me
           </button>
           {% endif %}
@@ -699,7 +699,7 @@
   <!-- Step 7: Done -->
   <div class="wiz-card d-none" id="wiz-step-7">
     <div class="wiz-card-title"><i class="bi bi-check-circle-fill text-success me-2"></i>Ready to Go</div>
-    <div class="wiz-card-sub">Here's what you've configured. Click the button below to save and start using Pantry Raider.</div>
+    <div class="wiz-card-sub">Here's what you've configured. Click the button below to save and start using {{ app_name }}.</div>
 
     <!-- Summary list, built by JS -->
     <div id="wiz-summary" class="mb-4"></div>
@@ -710,7 +710,7 @@
     <div class="section-card mb-3 text-start" id="wiz-community-optin">
       <div class="section-title"><i class="bi bi-people text-info me-1"></i>Help improve shelf-life estimates
         <span class="badge bg-secondary ms-1">Optional</span></div>
-      <p class="text-secondary small mb-2">When you correct a suggested best-by date, Pantry Raider can share
+      <p class="text-secondary small mb-2">When you correct a suggested best-by date, {{ app_name }} can share
         that one anonymous data point so everyone gets better estimates. Each point contains only the product
         barcode (when it has one), the product name, whether it went in the fridge, freezer, or pantry, the
         shelf life you chose in days, and what the app had suggested. Nothing about you, your account, your
@@ -736,7 +736,7 @@
     <div class="d-flex flex-wrap justify-content-between gap-2">
       <button class="btn btn-outline-secondary" onclick="wizBack()"><i class="bi bi-arrow-left me-1"></i>Back</button>
       <button class="btn btn-success btn-lg px-4" onclick="wizSaveAll()" id="wiz-finish-btn">
-        <i class="bi bi-rocket-takeoff me-2"></i>Start using Pantry Raider
+        <i class="bi bi-rocket-takeoff me-2"></i>Start using {{ app_name }}
       </button>
     </div>
   </div>

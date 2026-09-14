@@ -29,7 +29,7 @@
   <link rel="apple-touch-icon" href="static/pwa/apple-touch-icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Pantry Raider">
+  <meta name="apple-mobile-web-app-title" content="{{ app_name }}">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="virtual-keyboard" content="overlays-content">
   <script>
@@ -121,6 +121,7 @@
   {% endif %}
   <link href="static/vendor/bootstrap-icons.min.css" rel="stylesheet">
   <script>
+    window.APP_NAME = {{ app_name | tojson }};
     // Kiosk mode: load touch-target CSS before first paint to avoid reflow flash
     if (localStorage.getItem('kioskMode') === 'true') {
       var _kl = document.createElement('link');

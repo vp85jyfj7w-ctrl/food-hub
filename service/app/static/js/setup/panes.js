@@ -577,7 +577,7 @@ function savePaneRecipes(btn) {
 // run again (already-copied recipes are skipped) and Mealie is never changed.
 async function migrateRecipesFromMealie(btn) {
   const el = document.getElementById('recipes-migrate-result');
-  if (!confirm('Copy all your Mealie recipes into Pantry Raider and keep them here from now on? Mealie itself is not changed.')) return;
+  if (!confirm('Copy all your Mealie recipes into ' + (window.APP_NAME || 'Pantry Raider') + ' and keep them here from now on? Mealie itself is not changed.')) return;
   const orig = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Copying…';
@@ -985,6 +985,10 @@ function savePaneHardware(btn) {
   return savePane({
     scanner_type:           optVal('scanner_type'),
     barcode_global_capture: chk('barcode_global_capture'),
+    // "Scan Next Item" (Food Hub, brief 3.2): lives in this panel, not the
+    // AI & Scanning pane's barcode-enrichment section, since it is purely
+    // about the Manage Pantry camera-scanner loop, not enrichment.
+    quick_add_mode:         chk('quick_add_mode'),
     // UART barcode scanner (FoodAssistant-x61t). Only sent when the fields are
     // on the page, so a surface without them leaves the stored values alone.
     scanner_uart_enabled:   chk('scanner_uart_enabled'),

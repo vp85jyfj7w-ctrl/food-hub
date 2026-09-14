@@ -107,7 +107,7 @@
                            value="{{ s.streamdeck_idle_timeout }}">
                   </div>
                   <div class="col-auto">
-                    <label class="form-label d-block" for="streamdeck_logo_when_display_off">Show logo when deck goes idle{{ info('When the deck reaches the idle time above, it shows the Pantry Raider logo across the keys instead of going dark. Press any key (or touch the screen) to bring the buttons back. Turn this off to have the deck blank fully at idle.') }}</label>
+                    <label class="form-label d-block" for="streamdeck_logo_when_display_off">Show logo when deck goes idle{{ info('When the deck reaches the idle time above, it shows the {{ app_name }} logo across the keys instead of going dark. Press any key (or touch the screen) to bring the buttons back. Turn this off to have the deck blank fully at idle.') }}</label>
                     <div class="form-check form-switch mt-1">
                       <input class="form-check-input" type="checkbox" id="streamdeck_logo_when_display_off"
                              {{ 'checked' if s.streamdeck_logo_when_display_off else '' }}>

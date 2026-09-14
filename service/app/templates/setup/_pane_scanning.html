@@ -23,6 +23,10 @@
                          'When on, a barcode scanned on any screen is saved to Pending and the app jumps to Manage Pantry. When off, scanning only works on the Manage Pantry page.') %}
               {{ toggle('barcode_global_capture', checked=s.barcode_global_capture, label='Scan from any page') }}
             {% endcall %}
+            {% call srow('Scan Next Item', 'Keep stocking up without stopping the camera (Food Hub).',
+                         'In Inventory (Stock up) mode, a scan that matches a known product commits straight to stock and the camera keeps running for the next one, instead of stopping after every scan and waiting in the pending queue. An unrecognized barcode still falls back to the pending queue as normal, so nothing is ever lost -- only known items get the fast path.') %}
+              {{ toggle('quick_add_mode', checked=s.quick_add_mode, label='Scan Next Item (instant stock-up)') }}
+            {% endcall %}
             {% call srow('Set up a scan-engine reader', 'Program it off the screen with a guided wizard.',
                          'Walks a Waveshare (or similar) scan-engine module through its setup codes one at a time so it scans hands-free, no button. Open it here on the kiosk, or scan the code on a phone to run the wizard right by the reader.') %}
               <div class="d-flex flex-wrap align-items-center gap-3">
@@ -245,7 +249,7 @@
           <div class="test-result mt-2 mb-3" id="ai-save-result"></div>
           {% endif %}
 
-          {# AI token usage + budget (Pantry Raider). Shows what this instance's
+          {# AI token usage + budget ({{ app_name }}). Shows what this instance's
              AI key has spent and lets a user on their own key cap it per month. #}
           {% call panel('AI token usage & budget',
                         'What your AI key has spent through this app, with an optional monthly cap.') %}

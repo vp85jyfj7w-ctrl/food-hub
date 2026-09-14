@@ -90,7 +90,7 @@ docker compose up -d</code></pre>
             {% endcall %}
           {% endcall %}
 
-          {% call panel('Backup', 'Pantry Raider\'s data directory (settings, database, staples list) as a zip.') %}
+          {% call panel('Backup', '{{ app_name }}\'s data directory (settings, database, staples list) as a zip.') %}
             <p class="text-secondary small mt-1 mb-2">Grocy and Mealie data live in separate containers; use <code>scripts/backup.sh</code> on the host for a full snapshot.</p>
             {% call srow('Include secrets', 'Off keeps the zip safe to store anywhere.',
                          'By default API keys, passwords, and rclone.conf are stripped so the file is safe to store off-box; after restoring you re-enter keys here. Only include them if the destination is trusted.') %}
@@ -163,7 +163,7 @@ docker compose up -d</code></pre>
               <div class="test-result mt-1" id="rclone-result"></div>
             {% endcall %}
             {% call srow('USB drive backup', 'Saves to a flash drive, on a schedule or on demand.',
-                         'Plug a formatted, mounted flash drive into this device and Pantry Raider saves backups to a pantryraider-backups folder on it. The newest 14 backups are kept, and nothing else on the drive is touched.' ~ (' On this device a backup holds its settings and local data, so a replacement unit can be restored from it.' if is_satellite else '')) %}
+                         'Plug a formatted, mounted flash drive into this device and {{ app_name }} saves backups to a pantryraider-backups folder on it. The newest 14 backups are kept, and nothing else on the drive is touched.' ~ (' On this device a backup holds its settings and local data, so a replacement unit can be restored from it.' if is_satellite else '')) %}
               <div class="test-result mb-2" id="usb-status"></div>
               <div class="d-flex align-items-center gap-2">
                 <input type="number" class="form-control form-control-sm" id="usb_backup_interval_hours" min="0" max="720"

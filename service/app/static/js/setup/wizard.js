@@ -252,7 +252,7 @@ async function requestServerAccess() {
     });
     const d = await r.json();
     if (!d.ok) { _pairingMsg('text-danger', d.error || 'The server refused the pairing request.'); if (btn) btn.disabled = false; return; }
-    _pairingMsg('text-info', 'Confirm this code on your Pantry Raider server (a notification is showing there now):', d.code);
+    _pairingMsg('text-info', 'Confirm this code on your ' + (window.APP_NAME || 'Pantry Raider') + ' server (a notification is showing there now):', d.code);
     const deadline = Date.now() + ((d.expires_in || 300) * 1000);
     _pairingPollTimer = setInterval(async () => {
       if (Date.now() > deadline) {
@@ -540,7 +540,7 @@ function _wizServerInvNotFound() {
   if (el) {
     el.innerHTML = '<span class="text-warning"><i class="bi bi-exclamation-circle-fill me-1"></i>'
       + 'No inventory service answered on this machine.</span>'
-      + '<div class="mt-1">Start the built-in one from the folder you installed Pantry Raider in:</div>'
+      + '<div class="mt-1">Start the built-in one from the folder you installed ' + (window.APP_NAME || 'Pantry Raider') + ' in:</div>'
       + '<div class="mt-1"><code class="user-select-all">docker compose --profile with-grocy up -d</code></div>'
       + '<div class="mt-1">This step connects by itself once it is running. '
       + 'Already run your own? Enter its address below.</div>';
@@ -743,7 +743,7 @@ async function wizSaveAll() {
       resultEl.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle-fill me-1"></i>' +
         'Server URL and API key are required. <a href="#" onclick="event.preventDefault();_wizShowStep(1)">Go to Welcome</a></div>';
       btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-rocket-takeoff me-2"></i>Start using Pantry Raider';
+      btn.innerHTML = '<i class="bi bi-rocket-takeoff me-2"></i>Start using ' + (window.APP_NAME || 'Pantry Raider');
       return;
     }
   } else {
@@ -753,7 +753,7 @@ async function wizSaveAll() {
       resultEl.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle-fill me-1"></i>' +
         'A password is required. <a href="#" onclick="event.preventDefault();_wizShowStep(2)">Go to Security</a></div>';
       btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-rocket-takeoff me-2"></i>Start using Pantry Raider';
+      btn.innerHTML = '<i class="bi bi-rocket-takeoff me-2"></i>Start using ' + (window.APP_NAME || 'Pantry Raider');
       return;
     }
 
@@ -762,7 +762,7 @@ async function wizSaveAll() {
       resultEl.innerHTML = '<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle-fill me-1"></i>' +
         'An inventory address is required. <a href="#" onclick="event.preventDefault();_wizShowStep(4)">Go to Inventory</a></div>';
       btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-rocket-takeoff me-2"></i>Start using Pantry Raider';
+      btn.innerHTML = '<i class="bi bi-rocket-takeoff me-2"></i>Start using ' + (window.APP_NAME || 'Pantry Raider');
       return;
     }
   }
@@ -801,7 +801,7 @@ async function wizSaveAll() {
   } catch (e) {
     resultEl.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle-fill me-1"></i>${e.message}</div>`;
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-rocket-takeoff me-2"></i>Start using Pantry Raider';
+    btn.innerHTML = '<i class="bi bi-rocket-takeoff me-2"></i>Start using ' + (window.APP_NAME || 'Pantry Raider');
   }
 }
 

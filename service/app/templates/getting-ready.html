@@ -8,7 +8,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <base href="{{ ingress_path }}/">
-  <title>Getting Ready: Pantry Raider</title>
+  <title>Getting Ready: {{ app_name }}</title>
   {% if theme_css %}
   <link href="{{ theme_css }}" rel="stylesheet">
   {% else %}
@@ -38,12 +38,12 @@
   <div class="card" style="width: 100%; max-width: 460px;">
     <div class="card-body p-4 text-center">
       <h5 class="card-title mb-1">
-        <img src="static/icons/logo-mark.png" alt="" style="height:28px;width:auto" class="me-2">Pantry Raider
+        <img src="static/icons/logo-mark.png" alt="" style="height:28px;width:auto" class="me-2">{{ app_name }}
       </h5>
       <p class="text-secondary mb-4">Your device is getting ready</p>
 
       <div class="text-start mx-auto mb-3" style="max-width: 340px;" id="gr-steps">
-        <div class="gr-step"><i class="bi bi-check-circle-fill text-success"></i><span>Pantry Raider is running</span></div>
+        <div class="gr-step"><i class="bi bi-check-circle-fill text-success"></i><span>{{ app_name }} is running</span></div>
         <div class="gr-step"><span class="spinner-border spinner-border-sm text-info"></span><span>Starting the inventory service</span></div>
         <div class="gr-step"><i class="bi bi-circle text-secondary"></i><span>Connecting the inventory</span></div>
       </div>

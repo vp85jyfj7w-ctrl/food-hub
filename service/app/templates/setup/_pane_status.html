@@ -39,7 +39,7 @@
 
   {% call panel('Cloud', 'Your Forager account and how the kitchen is reached from away.') %}
     {% if features.satellite %}
-    {{ status_row('main_server', 'Main server', 'The Pantry Raider server this display follows.', 'pane-devices') }}
+    {{ status_row('main_server', 'Main server', 'The {{ app_name }} server this display follows.', 'pane-devices') }}
     {% else %}
     {{ status_row('forager', 'Forager account', 'Your cloud account.', 'pane-forager') }}
     {{ status_row('remote_access', 'Remote access', 'Reaching the kitchen from outside home.', 'pane-forager') }}
@@ -47,7 +47,7 @@
   {% endcall %}
 
   {% if not features.satellite or (s.streamdeck_ha_base_url and s.streamdeck_ha_token) %}
-  {% call panel('Services', 'The apps Pantry Raider connects to.') %}
+  {% call panel('Services', 'The apps {{ app_name }} connects to.') %}
     {% if not features.satellite %}
     {{ status_row('grocy', 'Grocy', 'Your inventory.', 'pane-inventory') }}
     {% if s.mealie_api_key and s.mealie_base_url %}

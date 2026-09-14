@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Recipes: Pantry Raider{% endblock %}
+{% block title %}Recipes: {{ app_name }}{% endblock %}
 {% block content %}
 
 <style>
@@ -40,8 +40,8 @@
       <i class="bi bi-box-arrow-up-right me-1"></i>Open Mealie
     </a>
     <button class="btn btn-sm btn-outline-secondary" id="migrate-mealie-btn" onclick="migrateFromMealie(this)"
-            title="Copy every Mealie recipe into Pantry Raider. Mealie is never changed.">
-      <i class="bi bi-box-arrow-in-down me-1"></i>Copy into Pantry Raider
+            title="Copy every Mealie recipe into {{ app_name }}. Mealie is never changed.">
+      <i class="bi bi-box-arrow-in-down me-1"></i>Copy into {{ app_name }}
     </button>
     {% endif %}
     <div class="btn-group">
@@ -162,7 +162,7 @@
           <i class="bi bi-box-arrow-up-right me-1"></i>Open in Mealie
         </a>
         <button class="btn btn-outline-primary d-none" id="pv-edit" onclick="editFromPreview()"
-                title="Edit this recipe in Pantry Raider">
+                title="Edit this recipe in {{ app_name }}">
           <i class="bi bi-pencil me-1"></i>Edit
         </button>
         <button class="btn btn-outline-primary d-none" id="pv-parse" onclick="parseIngredients(this)"
@@ -307,7 +307,7 @@
 
         <section aria-labelledby="share-link-heading">
           <h6 id="share-link-heading" class="mb-1"><i class="bi bi-link-45deg me-1"></i>Share a link</h6>
-          <p class="small text-secondary mb-2">Anyone with the link can read the recipe in their browser and add it to their own Pantry Raider. No account needed on their side.</p>
+          <p class="small text-secondary mb-2">Anyone with the link can read the recipe in their browser and add it to their own {{ app_name }}. No account needed on their side.</p>
           <button class="btn btn-sm btn-primary" id="share-link-btn" onclick="createShareLink(this)">
             <i class="bi bi-link-45deg me-1"></i>Create share link
           </button>
@@ -350,7 +350,7 @@
 
         <section aria-labelledby="share-community-heading">
           <h6 id="share-community-heading" class="mb-1"><i class="bi bi-people me-1"></i>Post to the Forager community</h6>
-          <p class="small text-secondary mb-2">Publish the recipe so every Pantry Raider kitchen can find and cook it.</p>
+          <p class="small text-secondary mb-2">Publish the recipe so every {{ app_name }} kitchen can find and cook it.</p>
           <button class="btn btn-sm btn-primary" id="share-btn" onclick="submitShare()">
             <i class="bi bi-people me-1"></i>Share with the community
           </button>
@@ -375,7 +375,7 @@
 
         <section aria-labelledby="share-copy-heading">
           <h6 id="share-copy-heading" class="mb-1"><i class="bi bi-file-earmark-arrow-down me-1"></i>Send a copy</h6>
-          <p class="small text-secondary mb-2">Download the recipe as plain text anyone can read, download a file that imports into any Pantry Raider (the From File button), or email the recipe text. None of these need a Forager account.</p>
+          <p class="small text-secondary mb-2">Download the recipe as plain text anyone can read, download a file that imports into any {{ app_name }} (the From File button), or email the recipe text. None of these need a Forager account.</p>
           <div class="d-flex flex-wrap gap-2">
             <a class="btn btn-sm btn-outline-secondary" id="share-download-text-btn" href="#" download>
               <i class="bi bi-file-earmark-text me-1"></i>Download as text
@@ -420,10 +420,10 @@ const FORAGER_LINKED = {{ 'true' if forager_linked else 'false' }};
 const AI_CONFIGURED = {{ 'true' if ai_configured else 'false' }};
 const SHARE_ATTRIBUTION_DEFAULT = {{ share_attribution_default | default('') | tojson }};
 
-// One-click migration: copy the whole Mealie library into Pantry Raider's own
+// One-click migration: copy the whole Mealie library into {{ app_name }}'s own
 // store (FoodAssistant-zwwe). Read-only toward Mealie and safe to re-run.
 async function migrateFromMealie(btn) {
-  if (!confirm('Copy all your Mealie recipes into Pantry Raider? Mealie itself is not changed.')) return;
+  if (!confirm('Copy all your Mealie recipes into {{ app_name }}? Mealie itself is not changed.')) return;
   const orig = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Copying…';
@@ -1379,7 +1379,7 @@ function openShare(slug, name) {
   shareLink = null;
   document.getElementById('share-name').textContent = name || 'this recipe';
   // The download links work with no cloud at all, so they are always live:
-  // the import file for another Pantry Raider, the plain text for a person.
+  // the import file for another {{ app_name }}, the plain text for a person.
   document.getElementById('share-download-btn').href =
     `mealie/recipes/export?slug=${encodeURIComponent(slug)}`;
   document.getElementById('share-download-text-btn').href =

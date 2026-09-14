@@ -105,7 +105,7 @@
             {% endcall %}
             {% endif %}
             {% call srow('Link name', 'Only shapes the links the app shows you.',
-                         'Only shapes the <hostname>.local links the app shows you for Grocy and Mealie on this device. It does not rename the device on the network. Empty means auto-detect. Set it when several Pantry Raider devices share one network.') %}
+                         'Only shapes the <hostname>.local links the app shows you for Grocy and Mealie on this device. It does not rename the device on the network. Empty means auto-detect. Set it when several {{ app_name }} devices share one network.') %}
               <input type="text" class="form-control" id="device_hostname" name="device_hostname"
                      placeholder="kitchen-pi" style="max-width:320px"
                      value="{{ s.device_hostname }}">

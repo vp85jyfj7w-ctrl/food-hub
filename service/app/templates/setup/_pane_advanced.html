@@ -7,7 +7,7 @@
           <p class="pane-intro">Maintenance that is not day-to-day: the timezone, reloads and reboots, diagnostics, and switching this device's role.</p>
 
           {% if s.deployment_mode == 'pi_hosted' %}
-          {% call panel('Run as a satellite', 'Point this appliance at another Pantry Raider server. The screen and Stream Deck keep working; inventory, recipes, and AI come from that server.') %}
+          {% call panel('Run as a satellite', 'Point this appliance at another {{ app_name }} server. The screen and Stream Deck keep working; inventory, recipes, and AI come from that server.') %}
             <button class="btn btn-link btn-sm p-0 text-secondary text-decoration-none" type="button"
                     data-bs-toggle="collapse" data-bs-target="#satellite-switch-collapse" aria-expanded="false">
               <i class="bi bi-chevron-down me-1"></i>Set up satellite mode

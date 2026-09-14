@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import date
 from typing import Optional
 
@@ -23,6 +24,9 @@ from ..services.grocy import (GrocyClient, parse_grocycode, stock_has_product,
 from ..services.label_render import prettify_date
 from ..services import (best_by_provenance, expiry_learning, nutrition,
                         scan_session, scanner_mode, shopping_source)
+from ..services import foodhub_retailers, shopping_session as foodhub_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pending", tags=["pending"])
 
@@ -272,6 +276,10 @@ class PendingUpdate(BaseModel):
     best_by_date: Optional[str] = None   # "" clears the date
     brand: Optional[str] = None
     notes: Optional[str] = None
+    # Food Hub (FoodHub-0002): optional "Bought From" retailer, set from the
+    # review screen's retailer selector. 0 clears it (None is "field not
+    # sent" for a PATCH, so a real "no retailer" needs its own sentinel).
+    retailer_id: Optional[int] = None
 
 
 class CommitRequest(BaseModel):
@@ -297,6 +305,9 @@ def _row_dict(row: PendingItem, duplicate: bool = False,
         # fast-acked scan (FoodAssistant-x61t): the card shows "looking up..."
         # until it clears and the resolved name lands.
         "enriching": bool(row.enriching),
+        # Food Hub (FoodHub-0002): optional "Bought From" retailer, either set
+        # by hand on this row or auto-stamped from an active shopping session.
+        "retailer_id": row.retailer_id,
         # Derived from the barcode alone (no schema change needed): a
         # store-assigned/random-weight code can never be looked up, so the
         # pending card should prompt for a photo instead of the usual
@@ -480,6 +491,53 @@ async def scan_barcode(body: ScanRequest, request: Request, db: Session = Depend
                 {"status": "shopping_failed", "name": name, "mode": mode, "error": str(e)},
                 status_code=200,
             )
+
+    # Food Hub (FoodHub-0002, brief 3.2 "Scan Next Item"): opt-in instant
+    # commit for the default "inventory" (Stock up) mode, OFF by default so
+    # upstream's queue-then-review behavior is unchanged unless a household
+    # turns this on. Only takes the express path on a CONFIRMED lookup --
+    # anything uncertain (not found, store-local, OFF unreachable) falls
+    # through to the ordinary pending-queue code below rather than risk
+    # committing a guess straight to Grocy (brief's "manual always wins" and
+    # "never lose a scan" principles apply here too).
+    if mode == "inventory" and settings.quick_add_mode:
+        try:
+            item = await lookup_barcode(barcode, db)
+        except (BarcodeNotFound, BarcodeServiceError, BarcodeStoreLocal):
+            item = None
+        if item is not None:
+            item.quantity = body.quantity
+            grocy = GrocyClient()
+            try:
+                result = await grocy.import_item(item)
+            except Exception as e:  # noqa: BLE001 - Grocy outage: fall back to queueing
+                logger.warning("Quick-add commit failed for %s, queueing instead: %s",
+                               barcode, e)
+                item = None
+            if item is not None:
+                if item.best_by_date is not None:
+                    best_by_provenance.record(
+                        result.get("product_id"), item.name,
+                        item.best_by_source or "manual",
+                        item.best_by_date.isoformat(),
+                    )
+                try:
+                    session = foodhub_session.current(db)
+                    if session:
+                        foodhub_retailers.record_purchase(
+                            db, session.retailer_id, barcode=barcode,
+                            grocy_product_id=result.get("product_id"))
+                        foodhub_session.bump_item_count(db, session.id)
+                except Exception:  # noqa: BLE001 - tagging must never fail a commit
+                    db.rollback()
+                if (settings.barcode_autocheck_shopping
+                        and shopping_source.shopping_available()):
+                    try:
+                        await _autocheck_shopping(item.name)
+                    except Exception:
+                        pass
+                return {"status": "instant_added", "mode": mode,
+                       "item": {"name": item.name, "product_id": result.get("product_id")}}
 
     # Same barcode already pending → bump quantity instead of duplicating
     existing = (
@@ -847,6 +905,8 @@ async def update_pending(item_id: int, body: PendingUpdate, request: Request, db
     data = body.model_dump(exclude_none=True)
     if "best_by_date" in data and data["best_by_date"] == "":
         data["best_by_date"] = None
+    if "retailer_id" in data and not data["retailer_id"]:
+        data["retailer_id"] = None  # 0 (or falsy) clears the retailer
     if "best_by_date" in data and row.suggested_source is None:
         # First time the user touches the date on this row: stash what the app
         # had suggested, so the commit can compare the user's final choice
@@ -976,9 +1036,26 @@ async def commit_pending(body: CommitRequest, request: Request, db: Session = De
             # the row is deleted; never blocks a commit.
             if _capture_learning(row):
                 captured += 1
+            # Food Hub (FoodHub-0002): tag this purchase with a retailer, read
+            # before the row is deleted -- the row's own choice wins, else an
+            # active Shopping Session auto-tags it (brief 3.5). Best-effort:
+            # bookkeeping here must never fail the commit that already
+            # succeeded against Grocy.
+            row_barcode, row_retailer_id = row.barcode, row.retailer_id
             db.delete(row)
             db.commit()
             results.append({"id": row_id, "status": "ok", **result})
+            try:
+                session = foodhub_session.current(db)
+                retailer_id = row_retailer_id or (session.retailer_id if session else None)
+                if retailer_id:
+                    foodhub_retailers.record_purchase(
+                        db, retailer_id, barcode=row_barcode,
+                        grocy_product_id=result.get("product_id"))
+                    if session:
+                        foodhub_session.bump_item_count(db, session.id)
+            except Exception:  # noqa: BLE001 - never let tagging fail a commit
+                db.rollback()
             # Record how the best-by date was worked out, now that the item
             # has a Grocy product id, exactly like /inventory/import does
             # (FoodAssistant-vb60). best_by_provenance quietly no-ops for

@@ -271,22 +271,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (b) b.classList.add('d-none');
     // A non-secure origin makes the browser drop getUserMedia entirely, which
     // used to look identical to "no camera hardware" -- the only sign anything
-    // was different was a small muted caption underneath. Point at the actual
-    // fix (open the same app over the configured public https address) when
-    // one is set, using the same lookup the phone-QR modal already makes;
-    // silently do nothing if no public URL is configured, same as before.
+    // was different was a small muted caption underneath. The banner's link is
+    // a fixed address (the Food Hub Scanner Netlify page, see add.html) rather
+    // than anything looked up from Settings: Food Hub's own https address
+    // forces a 2FA login wall for any off-network visit, which defeats the
+    // point of pointing someone at it just to scan a barcode.
     if (!window.isSecureContext) {
-      fetch('ui/qr/url').then(r => r.json()).then(d => {
-        if (!d || typeof d.url !== 'string' || !d.url.startsWith('https://')) return;
-        const notice = document.getElementById('insecure-camera-notice');
-        const link = document.getElementById('insecure-camera-link');
-        const hint = document.getElementById('camera-hint-default');
-        if (notice && link) {
-          link.href = d.url;
-          notice.classList.remove('d-none');
-          if (hint) hint.classList.add('d-none');
-        }
-      }).catch(() => {});
+      const notice = document.getElementById('insecure-camera-notice');
+      const hint = document.getElementById('camera-hint-default');
+      if (notice) {
+        notice.classList.remove('d-none');
+        if (hint) hint.classList.add('d-none');
+      }
     }
   }
   if (isKiosk) {
@@ -860,32 +856,6 @@ async function refreshAuditSummary() {
     if (e.key.length === 1) buf += e.key;
   });
 })();
-
-async function decodeBarcodePhoto(input) {
-  const file = input.files[0];
-  if (!file) return;
-  input.value = '';
-  showStatus('barcode-status', '<span class="spinner-border spinner-border-sm me-1"></span>Decoding barcode...', 'info');
-  try {
-    await ensureQrLib();
-    // Same format hints as the live scanner: fewer formats to try means a
-    // better hit rate on a soft or glary photo (FoodAssistant-fvuy).
-    const decoder = new Html5Qrcode("reader", {
-      formatsToSupport: [
-        Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.QR_CODE,
-      ],
-      verbose: false,
-    });
-    const result = await decoder.scanFileV2(file, /* showImage */ false);
-    await submitScan(result.decodedText);
-  } catch(e) {
-    showStatus('barcode-status',
-      'No barcode found in photo. Get closer, fill the frame with the barcode, and avoid glare.', 'warning');
-  }
-}
 
 async function startScanner() {
   document.getElementById('startScanBtn').classList.add('d-none');

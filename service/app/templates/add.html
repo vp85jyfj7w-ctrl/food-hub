@@ -199,26 +199,26 @@
               <button class="btn btn-secondary d-none" id="stopScanBtn" onclick="stopScanner()">
                 <i class="bi bi-stop-circle me-1"></i>Stop
               </button>
-              <button class="btn btn-outline-primary" onclick="document.getElementById('barcodePhotoInput').click()">
-                <i class="bi bi-camera me-1"></i>Snap Barcode Photo
-              </button>
-              <input type="file" id="barcodePhotoInput" accept="image/*" capture="environment"
-                     class="d-none" onchange="decodeBarcodePhoto(this)">
             </div>
             <div class="form-text mt-1" id="camera-hint-default">
-              Live scanning needs a secure (https) connection. On plain http, use "Snap Barcode Photo" instead.
+              Live scanning needs a secure (https) connection.
             </div>
             {# Shown instead of the muted line above when JS confirms this page really
                is on an insecure origin (manage-pantry.js) -- that's the exact situation
-               that silently hid the Start Camera button and left only the harder-to-read
-               single-photo option, with no visible explanation why (Will, Sept 2026). #}
+               that silently hid the Start Camera button with no visible explanation why
+               (Will, Sept 2026). Points at the dedicated Food Hub Scanner page instead of
+               Food Hub's own https address: that address forces a 2FA login wall for any
+               off-network visit (deliberate, not a bug), which is exactly the friction the
+               scanner page exists to avoid -- Will hit that wall directly and flagged it
+               (Sept 2026), so this link must never point back at it. #}
             <div class="alert alert-warning py-2 small mt-2 d-none" id="insecure-camera-notice">
               <i class="bi bi-shield-lock me-1"></i>
               This page opened over a plain (non-secure) connection, so the browser
-              won't allow live camera scanning here -- only the single-photo option
-              above works, and it's a much harder read than live scanning.
-              <a href="#" id="insecure-camera-link" class="alert-link">Open Food Hub securely</a>
-              to use the live scanner instead.
+              won't allow live camera scanning here.
+              <a href="https://foodhub-scan-bridge.netlify.app" id="insecure-camera-link"
+                 class="alert-link" target="_blank" rel="noopener">Open the Food Hub Scanner</a>
+              instead -- no extra login needed, and scans go straight to your Pending list
+              or stock the same as scanning here.
             </div>
           </div>
         </div>

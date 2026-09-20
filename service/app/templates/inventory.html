@@ -184,6 +184,11 @@
             <option>Frozen</option><option>Canned</option><option>Other</option>
           </select>
         </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Quantity</label>
+          <input type="number" class="form-control" id="editAmount" min="0" step="any" inputmode="decimal">
+          <div class="form-text">Total amount in stock. Set to 0 to clear it out.</div>
+        </div>
         <div class="mb-1">
           <label class="form-label fw-semibold">Best By Date</label>
           <input type="date" class="form-control" id="editBestBy">
@@ -332,6 +337,7 @@ function openEditModal(productId) {
   }
 
   document.getElementById('editBestBy').value = item.best_before_date || '';
+  document.getElementById('editAmount').value = item.amount;
   new bootstrap.Modal(document.getElementById('editModal')).show();
 }
 
@@ -343,12 +349,24 @@ async function saveEdit() {
 
   const category = document.getElementById('editCategory').value || null;
   const bestBy   = document.getElementById('editBestBy').value || null;
+  const amtRaw   = document.getElementById('editAmount').value;
+  const amount   = amtRaw === '' ? null : parseFloat(amtRaw);
+  const item     = itemsById[editTarget];
+  if (amount !== null && (isNaN(amount) || amount < 0)) {
+    showToast('Enter a valid quantity', true);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Save';
+    return;
+  }
 
   try {
     const r = await fetch(`/inventory/edit/${editTarget}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category, best_before_date: bestBy }),
+      body: JSON.stringify({
+        category, best_before_date: bestBy,
+        amount: (item && amount === item.amount) ? null : amount,
+      }),
     });
     if (!r.ok) throw new Error(await prErrText(r));
     bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();

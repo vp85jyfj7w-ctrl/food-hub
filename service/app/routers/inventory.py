@@ -109,6 +109,7 @@ class MoveRequest(BaseModel):
 class EditRequest(BaseModel):
     category: str | None = None
     best_before_date: str | None = None  # YYYY-MM-DD or empty string to clear
+    amount: float | None = None  # absolute quantity in stock (inventory correction)
 
 
 @router.patch("/edit/{product_id}")
@@ -117,7 +118,16 @@ async def edit_item(product_id: int, body: EditRequest):
     grocy = GrocyClient()
     try:
         bbd = body.best_before_date if body.best_before_date else None
-        return await grocy.edit_product(product_id, body.category, bbd)
+        if body.amount is not None and body.amount < 0:
+            raise HTTPException(422, "Quantity cannot be negative")
+        result = await grocy.edit_product(product_id, body.category, bbd)
+        if body.amount is not None:
+            # Grocy books the difference itself; the date is only needed when
+            # the correction increases stock.
+            await grocy.set_stock_amount(product_id, body.amount, bbd)
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, str(e))
 

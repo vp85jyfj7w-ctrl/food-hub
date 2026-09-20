@@ -104,6 +104,8 @@ _REVERSED_SORTS = {"name_desc", "added_desc"}
 
 class MoveRequest(BaseModel):
     bucket: str  # any built-in or custom category key (grocy.move_product validates)
+    amount: float | None = None       # how many to move; None = everything
+    from_bucket: str | None = None    # shelf the stock is being moved from
 
 
 class EditRequest(BaseModel):
@@ -157,8 +159,14 @@ async def move_item(product_id: int, body: MoveRequest, db: Session = Depends(ge
                     defaults_service.storage_kind_for_bucket(from_bucket),
                     _to, _days)
 
+        if body.amount is not None and body.amount <= 0:
+            raise HTTPException(422, "Quantity to move must be more than 0")
         return await grocy.move_product(product_id, body.bucket,
-                                        propose_best_by=proposer)
+                                        propose_best_by=proposer,
+                                        amount=body.amount,
+                                        from_bucket=body.from_bucket)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -168,7 +176,7 @@ async def get_dashboard(sort: str = "expiry_asc"):
     """Return stock grouped by storage bucket, sorted by the requested key."""
     grocy = GrocyClient()
     try:
-        items = await grocy.get_full_stock()
+        items = await grocy.get_full_stock(split_locations=True)
     except GrocyError as e:
         # 502 with honest copy, never a raw 500: the dashboard renders the
         # detail as its outage banner (FoodAssistant-2cmm). A Grocy-reported

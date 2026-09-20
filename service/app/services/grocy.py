@@ -590,7 +590,7 @@ class GrocyClient:
         expiring.sort(key=lambda x: x["days_remaining"])
         return expiring
 
-    async def get_full_stock(self) -> list[dict]:
+    async def get_full_stock(self, split_locations: bool = False) -> list[dict]:
         """Return all stock entries enriched with name, location, days_remaining, urgency, and storage bucket."""
         # None of these four reads depends on another, so the dashboard waits
         # once instead of four times over. return_exceptions keeps a Grocy
@@ -624,9 +624,43 @@ class GrocyClient:
             ts = row.get("row_created_timestamp") or row.get("purchased_date") or ""
             if pid and ts and ts > added.get(pid, ""):
                 added[pid] = ts
+        # Optional per-location split: when a product's stock sits in more than
+        # one place (2 chicken, 1 in the fridge and 1 in the freezer) the
+        # dashboard shows one row per location instead of lumping it all under
+        # the product's default location. Only the Inventory page asks for it.
+        by_loc: dict[int, dict[str, dict]] = {}
+        if split_locations:
+            for row in stock_rows:
+                pid = int(row.get("product_id") or 0)
+                amt = float(row.get("amount") or 0)
+                if not pid or amt <= 0:
+                    continue
+                lid = str(row.get("location_id") or "")
+                g = by_loc.setdefault(pid, {}).setdefault(lid, {"amount": 0.0, "bbd": None})
+                g["amount"] += amt
+                b = row.get("best_before_date")
+                if b and b != "2999-12-31" and (g["bbd"] is None or b < g["bbd"]):
+                    g["bbd"] = b
         today = date.today()
         result = []
+        entries_to_emit: list[dict] = []
         for entry in raw:
+            product = entry.get("product") or {}
+            _pid = int(entry.get("product_id", 0))
+            groups_here = by_loc.get(_pid, {})
+            if len(groups_here) > 1:
+                total = sum(g["amount"] for g in groups_here.values())
+                for lid, g in groups_here.items():
+                    sub = dict(entry)
+                    sub["location_id"] = int(lid) if lid.isdigit() else None
+                    sub["amount"] = g["amount"]
+                    if g["bbd"]:
+                        sub["best_before_date"] = g["bbd"]
+                    sub["_total_amount"] = total
+                    entries_to_emit.append(sub)
+                continue
+            entries_to_emit.append(entry)
+        for entry in entries_to_emit:
             product = entry.get("product") or {}
             name = product.get("name") or f"Product {entry.get('product_id', '?')}"
             # Prefer the per-entry location_id; fall back to the product's default
@@ -658,6 +692,7 @@ class GrocyClient:
                 "product_id": pid,
                 "name": name,
                 "amount": float(entry.get("amount") or 0),
+                "total_amount": float(entry.get("_total_amount") or entry.get("amount") or 0),
                 "unit": product.get("qu_unit_stock", {}).get("name") if product.get("qu_unit_stock") else None,
                 "best_before_date": bbd,
                 "days_remaining": days_remaining,
@@ -666,7 +701,7 @@ class GrocyClient:
                 "storage_bucket": bucket,
                 "category": groups.get(group_id, ""),
                 "added_date": added.get(pid),
-                "amount_opened": opened.get(pid, 0.0),
+                "amount_opened": min(opened.get(pid, 0.0), float(entry.get("amount") or 0)),
             })
         return result
 
@@ -747,7 +782,8 @@ class GrocyClient:
         return name, group
 
     async def move_product(self, product_id: int, bucket: str,
-                           propose_best_by=None) -> dict:
+                           propose_best_by=None, amount: float | None = None,
+                           from_bucket: str | None = None) -> dict:
         """Transfer all stock of a product to the location for `bucket` and
         make that the product's default location.
 
@@ -772,18 +808,38 @@ class GrocyClient:
             }
 
         entries = await self._get(f"/stock/products/{product_id}/entries")
+        if from_bucket:
+            # Only stock in the shelf the user is moving from (split rows).
+            loc_names = {
+                str(loc["id"]): loc["name"]
+                for loc in await self._cached_list("/objects/locations")
+            }
+            entries = [e for e in entries
+                       if classify_location(loc_names.get(str(e.get("location_id") or ""), "")) == from_bucket]
+        entries = sorted(entries, key=lambda e: e.get("best_before_date") or "9999")
+        movable = sum(float(e.get("amount") or 0) for e in entries
+                      if int(e.get("location_id") or 0) != to_id)
+        partial = amount is not None and amount < movable - 1e-9
+        remaining = amount if partial else None
         moved = 0.0
         best_by_updates: list[dict] = []
         for entry in entries:
-            amount = float(entry.get("amount") or 0)
+            entry_amount = float(entry.get("amount") or 0)
+            amount_i = entry_amount
             from_id = int(entry.get("location_id") or 0)
-            if amount <= 0 or from_id == to_id:
+            if entry_amount <= 0 or from_id == to_id:
                 continue
+            if partial:
+                if remaining <= 1e-9:
+                    break
+                amount_i = min(entry_amount, remaining)
+                remaining -= amount_i
+            entry_partial = amount_i < entry_amount - 1e-9
             if from_id:
                 old_iso = entry.get("best_before_date")
-                if propose_best_by is not None and old_iso:
-                    from_bucket = classify_location(locations.get(str(from_id), ""))
-                    new_date = propose_best_by(date.fromisoformat(old_iso), from_bucket)
+                if propose_best_by is not None and old_iso and not entry_partial:
+                    src_bucket = classify_location(locations.get(str(from_id), ""))
+                    new_date = propose_best_by(date.fromisoformat(old_iso), src_bucket)
                     if new_date is not None:
                         # The same write path as the sniff test and the quick
                         # edit: Grocy does not expose stock through /objects,
@@ -792,17 +848,34 @@ class GrocyClient:
                         if await self._set_entry_best_by(entry, new_date.isoformat()):
                             best_by_updates.append(
                                 {"old": old_iso, "new": new_date.isoformat()})
-                await self._post(f"/stock/products/{product_id}/transfer", {
-                    "amount": amount,
+                tbody = {
+                    "amount": amount_i,
                     "location_id_from": from_id,
                     "location_id_to": to_id,
-                })
-                moved += amount
+                }
+                if entry_partial and entry.get("stock_id"):
+                    tbody["stock_entry_id"] = entry["stock_id"]
+                await self._post(f"/stock/products/{product_id}/transfer", tbody)
+                moved += amount_i
+                if entry_partial and propose_best_by is not None and old_iso:
+                    # A split entry: re-date only what just landed at the
+                    # destination, leaving the part that stayed behind alone.
+                    src_bucket = classify_location(locations.get(str(from_id), ""))
+                    new_date = propose_best_by(date.fromisoformat(old_iso), src_bucket)
+                    if new_date is not None:
+                        for ne in await self._get(f"/stock/products/{product_id}/entries"):
+                            if (int(ne.get("location_id") or 0) == to_id
+                                    and ne.get("best_before_date") == old_iso):
+                                if await self._set_entry_best_by(ne, new_date.isoformat()):
+                                    best_by_updates.append(
+                                        {"old": old_iso, "new": new_date.isoformat()})
+                                    break
 
         # Entries without a location can't be transferred, but changing the
         # product's default location still re-buckets them on the dashboard.
-        await self._request("PUT", f"/objects/products/{product_id}",
-                            {"location_id": to_id})
+        if not partial and not from_bucket:
+            await self._request("PUT", f"/objects/products/{product_id}",
+                                {"location_id": to_id})
 
         # One transfer moves in one temperature direction, so every update
         # agrees; the earliest resulting date is the one the user will see

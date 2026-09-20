@@ -577,16 +577,46 @@ class GrocyClient:
         )
 
     async def get_expiring(self, days: int = 7) -> list[dict]:
-        stock = await self.get_stock()
+        stock, stock_rows, loc_rows = await asyncio.gather(
+            self.get_stock(), self._get("/objects/stock"),
+            self._cached_list("/objects/locations"))
+        loc_names = {str(l["id"]): l["name"] for l in loc_rows}
+        # /stock lumps a product's entries into one row with the earliest date
+        # and the total amount, so 1 chicken in the fridge + 1 in the freezer
+        # read as "2 expiring". Group the raw entries by location instead.
+        groups: dict[int, dict[str, dict]] = {}
+        for row in stock_rows:
+            pid = int(row.get("product_id") or 0)
+            amt = float(row.get("amount") or 0)
+            if not pid or amt <= 0:
+                continue
+            g = groups.setdefault(pid, {}).setdefault(
+                str(row.get("location_id") or ""), {"amount": 0.0, "bbd": None})
+            g["amount"] += amt
+            b = row.get("best_before_date")
+            if b and (g["bbd"] is None or b < g["bbd"]):
+                g["bbd"] = b
         today = date.today()
         expiring = []
         for entry in stock:
-            if not entry.get("best_before_date"):
-                continue
-            best_before = date.fromisoformat(entry["best_before_date"])
-            delta = (best_before - today).days
-            if delta <= days:
-                expiring.append({**entry, "days_remaining": delta})
+            pid = int(entry.get("product_id") or 0)
+            variants = []
+            if groups.get(pid):
+                for lid, g in groups[pid].items():
+                    v = {**entry, "amount": g["amount"], "best_before_date": g["bbd"]}
+                    if lid in loc_names:
+                        v["product"] = {**(entry.get("product") or {}),
+                                        "location": {"name": loc_names[lid]}}
+                    variants.append(v)
+            else:
+                variants.append(entry)
+            for v in variants:
+                if not v.get("best_before_date"):
+                    continue
+                best_before = date.fromisoformat(v["best_before_date"])
+                delta = (best_before - today).days
+                if delta <= days:
+                    expiring.append({**v, "days_remaining": delta})
         expiring.sort(key=lambda x: x["days_remaining"])
         return expiring
 

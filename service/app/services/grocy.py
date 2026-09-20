@@ -648,7 +648,7 @@ class GrocyClient:
             product = entry.get("product") or {}
             _pid = int(entry.get("product_id", 0))
             groups_here = by_loc.get(_pid, {})
-            if len(groups_here) > 1:
+            if groups_here:
                 total = sum(g["amount"] for g in groups_here.values())
                 for lid, g in groups_here.items():
                     sub = dict(entry)

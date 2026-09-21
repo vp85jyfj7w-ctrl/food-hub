@@ -528,6 +528,11 @@ function ensureCalendarStyles() {
 // fires on every tap of a real day in the grid. Returns a small controller
 // so the caller can clear the selection (a "No date" option) without
 // rebuilding the whole thing.
+function friendlyIso(iso) {
+  const d = parseIsoDate(iso);
+  return d.getDate() + ' ' + MONTH_NAMES[d.getMonth()];
+}
+
 function buildCalendar(container, initialIso, onPick) {
   const today = new Date();
   let sel = initialIso ? parseIsoDate(initialIso) : null;
@@ -593,6 +598,7 @@ function ensureConfirmModal() {
     '<div class="modal-dialog modal-dialog-centered"><div class="modal-content">' +
     '<div class="modal-header"><h5 class="modal-title" id="quickAddConfirmName">Item</h5></div>' +
     '<div class="modal-body">' +
+    '<input type="text" class="form-control mb-2 d-none" id="quickAddDescInput" placeholder="What is this?">' +
     '<div id="quickAddCal"></div>' +
     '<div class="d-flex justify-content-between align-items-start mt-2">' +
     '<div class="form-text mb-0" id="quickAddConfirmHint"></div>' +
@@ -628,14 +634,18 @@ async function confirmAndQuickAdd(code) {
     showStatus('barcode-status', 'Lookup failed: ' + esc(String(e)), 'danger');
     return;
   }
+  if (data && data.status === 'own_item') {
+    return openOwnItemConfirm(code, data);
+  }
   if (!data || data.status !== 'found') {
-    // Unknown / store-local / lookup trouble: fall back to the ordinary
-    // queue-to-Pending flow rather than lose the scan.
+    // Unknown / lookup trouble: fall back to the ordinary queue-to-Pending
+    // flow rather than lose the scan.
     showStatus('barcode-status',
       "Couldn't identify that barcode -- sending to Pending for review.", 'warning');
     return submitScanToPending(code);
   }
   ensureConfirmModal();
+  document.getElementById('quickAddDescInput').classList.add('d-none');
   _confirmPending = { code };
   _confirmDateIso = data.best_by_date || '';
   document.getElementById('quickAddConfirmName').textContent = data.name || code;
@@ -648,8 +658,40 @@ async function confirmAndQuickAdd(code) {
   _confirmBsModal.show();
 }
 
+// "Your own barcode" scan (Food Hub, Sept 2026): a barcode in the GS1
+// store-local/restricted-use range (see is_store_local_barcode on the
+// server) with no real product data behind it. GET /pending/lookup already
+// flagged it {"status": "own_item", "suggested_name": ...} -- this shows the
+// same confirm modal as a recognised product, but with an editable
+// description field instead of a fixed name, and commits via
+// POST /pending/own-item instead of /pending/quick-add.
+function openOwnItemConfirm(code, data) {
+  ensureConfirmModal();
+  _confirmPending = { code: code, ownItem: true };
+  // Will (Sept 2026): "when i scan any prepped food label can you auto fill
+  // the date so it expires in 3 days by default". The server already knows
+  // the per-category default shelf life (OWN_ITEM_PREFIX_DEFAULT_DAYS) and
+  // sends it as default_best_by_date; pre-select it on the calendar so it
+  // commits automatically if left untouched, but it's just as tappable to
+  // change or clear (No date) as any other confirm-modal date.
+  _confirmDateIso = data.default_best_by_date || '';
+  document.getElementById('quickAddConfirmName').textContent = data.suggested_name || code;
+  const descInput = document.getElementById('quickAddDescInput');
+  descInput.classList.remove('d-none');
+  descInput.value = '';
+  document.getElementById('quickAddConfirmHint').textContent = data.default_best_by_date
+    ? "Your own barcode -- type what's in it. Defaults to " + friendlyIso(data.default_best_by_date) + " -- tap a date to change it."
+    : "Your own barcode -- type what's in it, and pick a date if it has one.";
+  _confirmCal = buildCalendar(document.getElementById('quickAddCal'), _confirmDateIso,
+    function (iso) { _confirmDateIso = iso; });
+  showStatus('barcode-status', '', 'info');
+  _confirmBsModal.show();
+  setTimeout(function () { descInput.focus(); }, 150);
+}
+
 async function onQuickAddConfirmed() {
   if (!_confirmPending) return;
+  if (_confirmPending.ownItem) return onOwnItemConfirmed();
   const code = _confirmPending.code;
   const dateVal = _confirmDateIso || '';
   _confirmBsModal.hide();
@@ -675,6 +717,39 @@ async function onQuickAddConfirmed() {
       "Couldn't add it straight to stock (" + esc(result.error || result.status) +
       ') -- sending to Pending for review instead.', 'warning');
     await submitScanToPending(code);
+  }
+}
+
+async function onOwnItemConfirmed() {
+  if (!_confirmPending) return;
+  const code = _confirmPending.code;
+  const description = (document.getElementById('quickAddDescInput').value || '').trim();
+  if (!description) {
+    showStatus('barcode-status', 'Type what it is first.', 'warning');
+    return; // keep the modal open so they can fill it in
+  }
+  const dateVal = _confirmDateIso || '';
+  _confirmBsModal.hide();
+  _confirmPending = null;
+  showStatus('barcode-status',
+    '<span class="spinner-border spinner-border-sm me-1"></span>Adding...', 'info');
+  let result;
+  try {
+    const r = await fetch('pending/own-item', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ barcode: code, description: description, quantity: 1, best_by_date: dateVal }),
+    });
+    result = await r.json();
+  } catch (e) {
+    showStatus('barcode-status', 'Add failed: ' + esc(String(e)), 'danger');
+    return;
+  }
+  if (result.status === 'instant_added') {
+    handleScanResult(code, result);
+  } else {
+    showStatus('barcode-status',
+      "Couldn't add it (" + esc(result.error || result.status) + ').', 'danger');
   }
 }
 

@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 
 import httpx
@@ -15,7 +15,7 @@ from ..models.db_models import PendingItem
 from ..models.food import FoodItem, FoodCategory, StorageType
 from ..services.barcode import (
     lookup_barcode, BarcodeNotFound, BarcodeServiceError, BarcodeStoreLocal,
-    fetch_off_product, is_store_local_barcode, off_display_name,
+    fetch_off_product, is_own_item_code, parse_own_item_qr, off_display_name,
 )
 from ..services.defaults import (apply_defaults, propose_review_best_by,
                                  resolve_rule_days)
@@ -94,6 +94,67 @@ async def _autocheck_shopping(item_name: str) -> None:
 # this is concatenation from a scanner buffer that did not clear between scans,
 # so it is refused rather than queued (FoodAssistant-doz6).
 _MAX_BARCODE_LEN = 24
+
+
+# "Your own barcode" categories (Food Hub, Sept 2026): Will prints sequential
+# barcode labels in the GS1 store-local/restricted-use range (see
+# is_store_local_barcode) for things with no real product barcode -- prepped
+# freezer meals today. The first two digits pick the label; anything else in
+# that range still works, just with a generic label. Add more prefixes here
+# as new "own item" categories come up.
+OWN_ITEM_PREFIX_LABELS = {
+    "20": "Prepped Food",
+}
+OWN_ITEM_PREFIX_STORAGE = {
+    "20": StorageType.frozen,
+}
+# Will (Sept 2026): "when i scan any prepped food label can you auto fill the
+# date so it expires in 3 days by default". Per-category default shelf life
+# in days from today -- pre-fills the confirm-modal calendar with this date
+# (still editable/clearable, never committed blind) whenever a category has
+# one. Add more prefixes here as new "own item" categories come up; a prefix
+# with no entry just opens the calendar with nothing pre-selected, same as
+# before this existed.
+OWN_ITEM_PREFIX_DEFAULT_DAYS = {
+    "20": 3,
+}
+
+
+def _own_item_suggested_name(barcode: str) -> str:
+    """Human label + sequence number for a recognised own-item code -- either
+    one of Will's QR-code labels (see parse_own_item_qr: plain text like
+    "Prepped food 022") or a GS1 store-local numeric barcode (2-digit prefix
+    + zero-padded sequence + check digit, e.g. "2000000000473" -> "Prepped
+    Food #47")."""
+    barcode = (barcode or "").strip()
+    qr = parse_own_item_qr(barcode)
+    if qr:
+        label, seq = qr
+        return f"{label} #{seq}"
+    prefix = barcode[:2]
+    label = OWN_ITEM_PREFIX_LABELS.get(prefix, "Pantry Item")
+    middle = barcode[2:-1] if len(barcode) > 3 else ""
+    try:
+        seq = int(middle) if middle else None
+    except ValueError:
+        seq = None
+    return f"{label} #{seq}" if seq is not None else label
+
+
+def _own_item_default_days(barcode: str) -> int | None:
+    """Default shelf-life days for a recognised own-item code, whichever
+    mechanism it came through -- see OWN_ITEM_PREFIX_DEFAULT_DAYS. A QR-label
+    code is matched back to its category's GS1-prefix default by label text,
+    so one default lives per category regardless of which mechanism (QR text
+    or numeric barcode) produced it."""
+    qr = parse_own_item_qr(barcode)
+    if qr:
+        label, _ = qr
+        for prefix, plabel in OWN_ITEM_PREFIX_LABELS.items():
+            if plabel == label:
+                return OWN_ITEM_PREFIX_DEFAULT_DAYS.get(prefix)
+        return None
+    return OWN_ITEM_PREFIX_DEFAULT_DAYS.get(barcode[:2])
 
 
 def gtin_check_digit_ok(code: str) -> bool:
@@ -362,7 +423,7 @@ def _row_dict(row: PendingItem, duplicate: bool = False,
         # store-assigned/random-weight code can never be looked up, so the
         # pending card should prompt for a photo instead of the usual
         # "lookup failed, fix the name" hint.
-        "store_local": bool(row.barcode) and is_store_local_barcode(row.barcode),
+        "store_local": bool(row.barcode) and is_own_item_code(row.barcode),
         # True when this product already has stock in Grocy. Informational only:
         # the item can still be committed, and a commit on a different day lands a
         # separate stock entry so each scan keeps its own expiration.
@@ -697,7 +758,14 @@ async def lookup_for_confirm(barcode: str, request: Request, db: Session = Depen
     try:
         item = await lookup_barcode(barcode, db)
     except BarcodeStoreLocal:
-        return {"status": "store_local", "barcode": barcode}
+        default_days = _own_item_default_days(barcode)
+        default_date = (
+            (date.today() + timedelta(days=default_days)).isoformat()
+            if default_days is not None else None
+        )
+        return {"status": "own_item", "barcode": barcode,
+                "suggested_name": _own_item_suggested_name(barcode),
+                "default_best_by_date": default_date}
     except (BarcodeNotFound, BarcodeServiceError):
         return {"status": "not_found", "barcode": barcode}
     return {
@@ -766,6 +834,76 @@ async def quick_add_confirmed(body: QuickAddConfirm, request: Request,
                     {"status": "invalid_date", "barcode": barcode,
                      "best_by_date": body.best_by_date},
                     status_code=200)
+        item.best_by_source = "manual"
+
+    outcome = await _commit_instant_add(item, barcode, db)
+    if outcome is None:
+        return JSONResponse(
+            {"status": "commit_failed", "barcode": barcode,
+             "error": "Could not reach Grocy. Try again in a moment."},
+            status_code=200)
+    return outcome
+
+
+class OwnItemConfirm(BaseModel):
+    barcode: str
+    description: str
+    quantity: float = 1.0
+    best_by_date: Optional[str] = None  # "" or None = no date
+
+
+@router.post("/own-item")
+async def own_item_confirmed(body: OwnItemConfirm, request: Request,
+                             db: Session = Depends(get_db)):
+    """Commit a "your own barcode" scan straight to stock (Food Hub, Sept
+    2026). Will prints sequential barcode labels in the GS1 store-local range
+    (see is_store_local_barcode) for things with no real product barcode --
+    prepped freezer meals today, maybe more categories later -- sticks one
+    per container, and types a short description the first time each label
+    is scanned. GET /pending/lookup already flags these as
+    {"status": "own_item", "suggested_name": ...}; this endpoint takes the
+    person's typed description and does the actual commit.
+
+    The product name is "<category label> #<sequence> - <description>" (e.g.
+    "Prepped Food #47 - Chicken Tikka") so Grocy shows both which label it
+    was and what's actually in it. Reuses the exact same commit path as a
+    normal scan (_commit_instant_add / GrocyClient.import_item), which links
+    the barcode to the new product the same way a real scan would -- so
+    re-scanning the same label (e.g. to add more of the same batch) finds
+    the same product by name and just adds more stock.
+    """
+    if _upstream():
+        return await _forward(request, "/own-item")
+
+    barcode = body.barcode.strip()
+    if not barcode:
+        raise HTTPException(400, "Barcode is required")
+    if not is_own_item_code(barcode):
+        raise HTTPException(
+            400,
+            "That code isn't a recognised own-item code (a GS1 020-029 / "
+            "200-299 barcode, or one of your QR-label texts) -- this "
+            "endpoint is only for your own printed labels, never a real "
+            "product barcode.")
+    description = body.description.strip()
+    if not description:
+        raise HTTPException(400, "A description is required")
+
+    label = _own_item_suggested_name(barcode)
+    item = FoodItem(
+        name=f"{label} - {description}",
+        quantity=body.quantity,
+        storage_type=OWN_ITEM_PREFIX_STORAGE.get(barcode[:2], StorageType.frozen),
+        category=FoodCategory.other,
+    )
+    if body.best_by_date:
+        try:
+            item.best_by_date = date.fromisoformat(body.best_by_date)
+        except ValueError:
+            return JSONResponse(
+                {"status": "invalid_date", "barcode": barcode,
+                 "best_by_date": body.best_by_date},
+                status_code=200)
         item.best_by_source = "manual"
 
     outcome = await _commit_instant_add(item, barcode, db)

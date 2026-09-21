@@ -360,6 +360,15 @@
       if (document.body.classList.contains('ss-active')) hide();
     });
     mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+    // A field can already be focused before this script ever runs - the
+    // login page's password input has `autofocus`, so the browser focuses it
+    // while the HTML is still being parsed, well before this deferred script
+    // attaches the focusin listener above. Tapping that already-focused
+    // field again doesn't change focus, so no focusin event ever fires and
+    // the keyboard never opens for it - exactly the "works everywhere except
+    // the password box" symptom. Catch the already-focused case explicitly.
+    if (isEditable(document.activeElement)) showFor(document.activeElement);
   }
 
   if (document.readyState === 'loading') {

@@ -189,7 +189,7 @@
         <div class="card">
           <div class="card-body">
             <h6 class="card-title">Camera Scanner</h6>
-            <div id="scanner-container" style="width:100%; max-width:400px; margin:0 auto;">
+            <div id="scanner-container" style="width:100%; max-width:260px; margin:0 auto;">
               <div id="reader" style="width:100%"></div>
             </div>
             <div class="mt-2 d-flex gap-2 flex-wrap">
@@ -202,6 +202,9 @@
             </div>
             <div class="form-text mt-1" id="camera-hint-default">
               Live scanning needs a secure (https) connection.
+            </div>
+            <div class="form-text mt-1">
+              Hold the barcode flat, a few inches from the camera, centered in the box.
             </div>
             {# Shown instead of the muted line above when JS confirms this page really
                is on an insecure origin (manage-pantry.js) -- that's the exact situation

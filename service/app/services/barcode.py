@@ -1,5 +1,6 @@
 """Open Food Facts barcode lookup, shared by /analyze/barcode and /pending/scan."""
 import logging
+import re
 from datetime import date, timedelta
 
 import httpx
@@ -108,6 +109,45 @@ def is_store_local_barcode(barcode: str) -> bool:
     return False
 
 
+# Will has a SEPARATE private app (NTS Label Generator) that prints its own
+# labels as a QR code encoding plain text "<Category> NNN" (e.g. "Prepped
+# food 022") rather than a GS1 numeric barcode -- confirmed Sept 2026 when a
+# photo of a real label showed this instead of the EAN-13 labels this file
+# was originally built around. Food Hub's camera scanner already decodes QR
+# codes (Html5Qrcode's QR_CODE format is in its formatsToSupport list), so
+# that plain text arrives at the exact same lookup path a numeric barcode
+# would -- it just wasn't being recognised as an own-item code at all, so it
+# was silently sent to Open Food Facts as if it were a real barcode number
+# and always came back "not found". Keyed by the lowercased category text as
+# printed on the label; add more entries here as new label templates from
+# that app go live (planned: equipment, cables, inventory, food expiry,
+# storage, Outdoor Cinema, High Rise -- see nts-label-generator).
+OWN_ITEM_QR_CATEGORIES = {
+    "prepped food": "Prepped Food",
+}
+_OWN_ITEM_QR_PATTERN = re.compile(r'^\s*([a-zA-Z][a-zA-Z ]*?)\s+0*(\d+)\s*$')
+
+
+def parse_own_item_qr(code: str):
+    """(display label, sequence number) for a recognised QR-label own-item
+    code, or None. See OWN_ITEM_QR_CATEGORIES."""
+    m = _OWN_ITEM_QR_PATTERN.match((code or "").strip())
+    if not m:
+        return None
+    label = OWN_ITEM_QR_CATEGORIES.get(m.group(1).strip().lower())
+    if not label:
+        return None
+    return label, int(m.group(2))
+
+
+def is_own_item_code(code: str) -> bool:
+    """True for anything that should route to Food Hub's "own item" flow:
+    either a GS1 store-local/restricted-use numeric barcode (see
+    is_store_local_barcode) or one of Will's QR-code labels (see
+    parse_own_item_qr)."""
+    return is_store_local_barcode(code) or parse_own_item_qr(code) is not None
+
+
 def off_display_name(product: dict) -> str:
     """Human display name for an OFF product dict, or "" when it has none.
 
@@ -134,7 +174,7 @@ async def fetch_off_product(barcode: str) -> dict | None:
     fallback, and it never raises, so a consume reply can only ever be
     enriched by it, never delayed by an error."""
     barcode = (barcode or "").strip()
-    if not barcode or is_store_local_barcode(barcode):
+    if not barcode or is_own_item_code(barcode):
         return None
     try:
         async with httpx.AsyncClient(timeout=4.0, headers={"User-Agent": OFF_UA}) as client:
@@ -178,6 +218,23 @@ async def lookup_barcode(barcode: str, db: Session) -> FoodItem:
 
     Raises BarcodeNotFound / BarcodeServiceError.
     """
+    # A store-assigned/restricted-use code (see is_store_local_barcode) can
+    # never be a real, globally-assigned product, so this is checked BEFORE
+    # ever calling Open Food Facts -- not just as a fallback once OFF finds
+    # nothing. In practice this matters: OFF's crowd-sourced database is full
+    # of *other* people's random-weight/store-local codes reused under the
+    # same numeric ranges, so a code in this range can easily collide with
+    # unrelated real-world junk data (a Bulgarian milk brand, a French
+    # pastry, ...) and get treated as a genuine match -- or fail its own
+    # missing-name check and come back "not found" -- instead of correctly
+    # routing to the own-item flow (Will, Sept 2026: found 38 of his 40
+    # printed Prepped Food labels misclassified this way when the check only
+    # ran after an OFF miss).
+    if is_own_item_code(barcode):
+        raise BarcodeStoreLocal(
+            f"Barcode {barcode} looks like a store-assigned label, not a "
+            "product barcode"
+        )
     async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": OFF_UA}) as client:
         try:
             r = await client.get(
@@ -189,15 +246,6 @@ async def lookup_barcode(barcode: str, db: Session) -> FoodItem:
         raise BarcodeServiceError("Open Food Facts unavailable")
     data = r.json()
     if data.get("status") != 1:
-        # A store-assigned/random-weight code can never be resolved, by OFF or
-        # by an LLM guessing from the digits alone, so this check runs before
-        # the LLM fallback and skips it entirely rather than risk a
-        # hallucinated product.
-        if is_store_local_barcode(barcode):
-            raise BarcodeStoreLocal(
-                f"Barcode {barcode} looks like a store-assigned label, not a "
-                "product barcode"
-            )
         # OFF didn't recognise this barcode: optionally try the LLM
         if settings.barcode_llm_fallback:
             item = await _llm_identify_barcode(barcode)

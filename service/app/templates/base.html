@@ -577,16 +577,18 @@
             {%- endif %}
           </a>
         </li>
-        {% endfor %}
+        {%- if tab.key == 'pending' %}
         <!-- Refresh (Will, Sept 2026): reloads whatever page is showing, so on
-             the kiosk's Inventory pane it re-fetches fresh stock data. Sits in
-             the primary row where Shopping used to be, now that Shopping is
-             hidden from the nav. -->
+             the kiosk's Inventory pane it re-fetches fresh stock data. Pinned
+             right after Review (before Cook) so it's always in the visible
+             part of the row, not past the overflow point at the far end. -->
         <li class="nav-item">
           <a class="nav-link" href="#" onclick="location.reload(); return false;" title="Refresh">
             <i class="bi bi-arrow-clockwise me-1"></i>Refresh
           </a>
         </li>
+        {%- endif %}
+        {% endfor %}
       </ul>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav" aria-controls="nav" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -606,12 +608,14 @@
               <i class="bi {{ tab.icon }} me-2"></i>{{ tab.label }}
             </a>
           </li>
-          {% endfor %}
+          {%- if tab.key == 'pending' %}
           <li class="nav-item">
             <a class="nav-link" href="#" onclick="location.reload(); return false;">
               <i class="bi bi-arrow-clockwise me-2"></i>Refresh
             </a>
           </li>
+          {%- endif %}
+          {% endfor %}
           <li><hr class="dropdown-divider"></li>
         </ul>
         <ul class="navbar-nav ms-auto">

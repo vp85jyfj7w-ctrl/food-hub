@@ -207,3 +207,50 @@
     applyRotation();
   }
 })();
+
+// Wrap the primary tab row onto two (or more) lines in kiosk mode instead of
+// relying on a sideways swipe-scroll with no visible scrollbar and no mouse
+// to grab one with (Will, Sept 2026: "make it double row"). kiosk.css does
+// the actual wrapping, gated to a wide panel with a min-width:768px media
+// query (a narrow panel already hides this row entirely -- see kiosk.css).
+// This measures however tall that makes the bar and republishes it as
+// --kiosk-navbar-h so the body's top padding still clears it, instead of
+// guessing a fixed row count up front. Independent of the scale/rotation IIFE
+// above (and NOT gated to the Pi's own loopback display) because the tab row
+// can wrap on any kiosk-mode browser, not just the appliance's own screen.
+(function () {
+  var html = document.documentElement;
+  var kiosk = false;
+  try { kiosk = localStorage.getItem('kioskMode') === 'true'; } catch (e) { }
+  if (!kiosk) return;
+
+  var scale = parseFloat(html.getAttribute('data-ui-scale') || '1') || 1;
+
+  function measure() {
+    var bar = document.querySelector('.navbar.fixed-top');
+    if (!bar) return;
+    var h = bar.getBoundingClientRect().height;
+    if (h > 0) html.style.setProperty('--kiosk-navbar-h', (h / scale).toFixed(2) + 'px');
+  }
+
+  function scheduleMeasure() {
+    // Two rAFs: one for the tab row's own wrap/reflow, one for anything that
+    // reacts to it, before reading the settled height.
+    requestAnimationFrame(function () { requestAnimationFrame(measure); });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scheduleMeasure);
+  } else {
+    scheduleMeasure();
+  }
+  window.addEventListener('resize', scheduleMeasure);
+  window.addEventListener('orientationchange', scheduleMeasure);
+
+  // The tab list itself changes rarely (nav_order/nav_hidden in Settings),
+  // but when it does the bar height needs re-measuring without a reload.
+  var primary = document.querySelector('.navbar.fixed-top .nav-primary');
+  if (primary && window.MutationObserver) {
+    new MutationObserver(scheduleMeasure).observe(primary, { childList: true, subtree: true });
+  }
+})();

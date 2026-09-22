@@ -244,13 +244,17 @@ body {
   max-width: 100%;
 }
 body {
-  /* padding-top matches the slimmer navbar below (was 60px), plus any advanced
-   * display top inset. The left/right/bottom insets pull normal-flow content in
-   * from a panel edge that clips; box-sizing keeps that padding inside the
-   * viewport instead of widening the page. See the "Advanced display safe-area
-   * insets" block in kiosk-display.js for where these variables come from. */
+  /* padding-top matches the navbar's actual height, plus any advanced display
+   * top inset. --kiosk-navbar-h defaults to the slimmer single-row height (was
+   * 60px) and is republished by kiosk-display.js once the tab row wraps to two
+   * lines on a wide kiosk panel (below), so this still clears it without a
+   * hardcoded second-row guess. The left/right/bottom insets pull normal-flow
+   * content in from a panel edge that clips; box-sizing keeps that padding
+   * inside the viewport instead of widening the page. See the "Advanced
+   * display safe-area insets" block in kiosk-display.js for where these
+   * variables come from. */
   box-sizing: border-box;
-  padding-top: calc(50px + var(--kiosk-inset-top, 0px));
+  padding-top: calc(var(--kiosk-navbar-h, 50px) + var(--kiosk-inset-top, 0px));
   padding-left: var(--kiosk-inset-left, 0px);
   padding-right: var(--kiosk-inset-right, 0px);
   padding-bottom: var(--kiosk-inset-bottom, 0px);
@@ -286,6 +290,26 @@ body {
    kiosk mode. */
 @media (max-width: 767.98px) {
   .navbar.fixed-top .nav-primary { display: none !important; }
+}
+
+/* On a wide kiosk panel (e.g. the kitchen Pi's full-height Food Hub pane) the
+ * tab row stays visible, but it's flex-nowrap + horizontal-scroll by default
+ * (base.html), and there's no visible scrollbar and no mouse to grab one with
+ * -- a swipe is easy to miss, so tabs past the fold were effectively
+ * unreachable (Will, Sept 2026: "make it double row"). Wrap it onto as many
+ * rows as it needs instead. kiosk-display.js measures the resulting bar
+ * height and publishes --kiosk-navbar-h so the body offset above still clears
+ * it. Scoped to kiosk mode only (this sheet loads only when kioskMode is set)
+ * so a normal desktop browser keeps its single scrolling row. */
+@media (min-width: 768px) {
+  .navbar.fixed-top .nav-primary {
+    flex-wrap: wrap !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    max-height: none !important;
+    row-gap: 0.15rem;
+  }
+  .navbar.fixed-top .nav-primary .nav-link { white-space: nowrap; }
 }
 
 /* ── Floating nav as the primary touch navigation ───────────────────────────

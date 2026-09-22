@@ -57,12 +57,24 @@
 
 <div class="row">
   <div class="col-lg-7 col-xl-6">
-    <form class="input-group mb-3" onsubmit="addItem(event)">
+    <form class="input-group mb-2" onsubmit="addItem(event)">
       <input type="text" class="form-control" id="new-item" placeholder="Add an item…"
              list="new-item-suggestions" autocomplete="off" oninput="suggestItems(this.value)">
       <datalist id="new-item-suggestions"></datalist>
       <button class="btn btn-primary" type="submit" aria-label="Add this item to the list"><i class="bi bi-plus-lg"></i></button>
     </form>
+
+    {# Quick-add: one tap for the household's regulars, no typing needed on the
+       kiosk (Will, Sept 2026: "milk/cheese/bread/bacon/chicken whole/lurpak").
+       quick_add_items comes from the server (routers/ui.py's QUICK_ADD_ITEMS)
+       so the buttons render even before quickAdd()'s JS runs. #}
+    <div class="mb-3 d-flex flex-wrap gap-2" id="quick-add-row">
+      {% for q in quick_add_items %}
+      <button type="button" class="btn btn-sm btn-outline-secondary quick-add-btn" data-quick-add="{{ q }}">
+        <i class="bi bi-plus-lg me-1"></i>{{ q }}
+      </button>
+      {% endfor %}
+    </div>
 
     <div id="shopping-msg" class="alert alert-warning py-2 px-3 d-none" role="alert"></div>
 
@@ -217,6 +229,27 @@ async function addItem(ev) {
   }
   load(currentListId);
 }
+
+// Quick-add chips: same POST as the "Add an item" box, just skipping the typing
+// (Will, Sept 2026). Works on both backends -- unlike the restock-suggestions
+// addSuggestion() below, this isn't gated to Grocy.
+async function quickAdd(name) {
+  try {
+    const r = await fetch('mealie/shopping/items', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({list_id: currentListId || '', note: name}),
+    });
+    if (!r.ok) throw new Error(await prErrText(r));
+    shoppingMsg('');
+  } catch (e) {
+    shoppingMsg('Could not add ' + name + '. ' + prReason(e));
+  }
+  load(currentListId);
+}
+document.getElementById('quick-add-row').addEventListener('click', function (ev) {
+  const btn = ev.target.closest('[data-quick-add]');
+  if (btn) quickAdd(btn.dataset.quickAdd);
+});
 
 // Typeahead for the add box: known product/food names from the list's backend.
 // Fail-soft: no suggestions just leaves a plain text box.

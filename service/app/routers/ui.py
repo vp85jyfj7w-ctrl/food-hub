@@ -606,6 +606,13 @@ async def mealplan_page(request: Request):
     })
 
 
+# Quick-add chips on the Shopping List page: one tap for the household's
+# regulars instead of typing (Will, Sept 2026). Plain constant, not a setting
+# -- this is the exact list Will asked for, and it's a code change either way
+# to reorder or swap an item, so a settings field would add UI for no benefit.
+QUICK_ADD_ITEMS = ["Milk", "Cheese", "Bread", "Bacon", "Chicken (whole)", "Lurpak"]
+
+
 @router.get("/shopping", response_class=HTMLResponse)
 async def shopping_page(request: Request):
     from ..services import shopping_source
@@ -619,6 +626,7 @@ async def shopping_page(request: Request):
         # Print button (Phase 9.1, Our Shopping List / shopping-bridge sync):
         # only worth showing once the bridge URL + token are actually set.
         "shopping_print_configured": bool(SHOPPING_BRIDGE_URL and SHOPPING_BRIDGE_TOKEN),
+        "quick_add_items": QUICK_ADD_ITEMS,
     })
 
 

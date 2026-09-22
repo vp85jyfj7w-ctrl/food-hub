@@ -79,6 +79,15 @@
     outline-offset: -2px;
     background: rgba(13,110,253,0.08);
   }
+  /* Multi-select (Will, Sept 2026: batch move/delete/consume). The whole row
+     is the tap target on a touch kiosk, not just the small checkbox. */
+  .item-row.selectable { cursor: pointer; }
+  .item-row.row-selected { background: rgba(13,110,253,0.14); }
+  .select-chk { width: 1.15rem; height: 1.15rem; flex: none; }
+  #bulkBar {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+  }
   {% for c in panels %}
   .panel-{{ c.key }} .panel-header { background: {{ c.bg }}; color: {{ c.color }}; }
   .panel-{{ c.key }} { border-color: {{ c.bg }} !important; }
@@ -107,7 +116,34 @@
     <button class="btn btn-outline-secondary" onclick="loadDashboard()" title="Refresh">
       <i class="bi bi-arrow-clockwise"></i>
     </button>
+    <button class="btn btn-outline-secondary" id="selectModeBtn" onclick="toggleSelectMode()"
+            title="Select multiple items to move, consume or toss together">
+      <i class="bi bi-check2-square"></i>
+    </button>
     <span id="loading-spinner" class="spinner-border spinner-border-sm text-secondary"></span>
+  </div>
+</div>
+
+<!-- Bulk action bar: only shown once "Select" is turned on (Will, Sept 2026:
+     batch move/delete/consume). In normal document flow, not fixed, so it
+     never overlaps the panels below it or fights the kiosk navbar's own
+     top-padding offset. -->
+<div class="d-none align-items-center justify-content-between flex-wrap gap-2 p-2 mb-3" id="bulkBar">
+  <span class="fw-semibold ps-1" id="bulkCount">0 selected</span>
+  <div class="d-flex gap-2 flex-wrap">
+    <button class="btn btn-sm btn-outline-secondary" onclick="selectAllVisible()">Select all</button>
+    <button class="btn btn-sm btn-outline-primary" id="bulkMoveBtn" onclick="openBulkMoveModal()">
+      <i class="bi bi-arrow-left-right me-1"></i>Move…
+    </button>
+    <button class="btn btn-sm btn-outline-success" id="bulkConsumeBtn" onclick="bulkConsume()">
+      <i class="bi bi-check2 me-1"></i>Mark eaten
+    </button>
+    <button class="btn btn-sm btn-outline-danger" id="bulkTossBtn" onclick="bulkToss()">
+      <i class="bi bi-trash me-1"></i>Toss (waste)
+    </button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="toggleSelectMode()">
+      <i class="bi bi-x-lg me-1"></i>Done
+    </button>
   </div>
 </div>
 
@@ -166,6 +202,29 @@
         {% for c in categories %}
         <button class="btn" style="border:1px solid {{ c.color }}; color:{{ c.color }}"
                 data-move-to="{{ c.key }}">
+          <i class="bi {{ c.icon }} me-1"></i>{{ c.label }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk move modal (multi-select): moves every selected item's full quantity
+     to one target location. No per-item quantity picker here -- keeping a
+     batch action simple is the point; use the single-item Move for a partial
+     quantity. -->
+<div class="modal fade" id="bulkMoveModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Move <span id="bulkMoveCount"></span> item(s) to…</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body d-grid gap-2">
+        {% for c in categories %}
+        <button class="btn" style="border:1px solid {{ c.color }}; color:{{ c.color }}"
+                data-bulk-move-to="{{ c.key }}">
           <i class="bi {{ c.icon }} me-1"></i>{{ c.label }}
         </button>
         {% endfor %}
@@ -277,9 +336,15 @@ function renderPanel(panelId, countId, items, bucket) {
     return;
   }
   el.innerHTML = items.map(item => `
-    <div class="item-row" id="row-${item.product_id}-${bucket}" draggable="true"
+    <div class="item-row ${selectMode ? 'selectable' : ''} ${selectMode && selectedIds.has(item.product_id) ? 'row-selected' : ''}"
+         id="row-${item.product_id}-${bucket}" ${selectMode ? '' : 'draggable="true"'}
          data-product-id="${item.product_id}" data-bucket="${bucket}" data-amount="${item.amount}" data-name="${esc(item.name)}"
-         ondragstart="dragStart(event)" ondragend="dragEnd(event)">
+         ${selectMode ? `onclick="toggleSelect(${item.product_id})"` : 'ondragstart="dragStart(event)" ondragend="dragEnd(event)"'}>
+      ${selectMode ? `
+      <div class="form-check mb-0">
+        <input class="form-check-input select-chk" type="checkbox" ${selectedIds.has(item.product_id) ? 'checked' : ''}
+               onclick="event.stopPropagation(); toggleSelect(${item.product_id})">
+      </div>` : ''}
       <div class="item-name">
         <div class="item-name-text" title="${esc(item.name)}${item.added_date ? ', added ' + item.added_date.slice(0,10) : ''}">${esc(item.name)}</div>
         ${item.description ? `<div class="item-name-desc" title="${esc(item.description)}">${esc(item.description)}</div>` : ''}
@@ -288,6 +353,7 @@ function renderPanel(panelId, countId, items, bucket) {
       <span class="item-qty">${item.amount % 1 === 0 ? item.amount : item.amount.toFixed(1)}${item.unit ? ' ' + esc(item.unit) : ''}</span>
       ${item.amount_opened > 0 ? `<span class="expiry-badge badge-opened" title="${item.amount_opened % 1 === 0 ? item.amount_opened : item.amount_opened.toFixed(1)} of these ${esc(item.name)} already open">Opened</span>` : ''}
       ${expiryBadge(item)}
+      ${selectMode ? '' : `
       <div class="act ms-1"><span class="act-lbl">Edit</span><button class="btn btn-outline-secondary btn-icon" title="Edit category / expiry"
               onclick="openEditModal(${item.product_id})">
         <i class="bi bi-pencil"></i>
@@ -317,7 +383,7 @@ function renderPanel(panelId, countId, items, bucket) {
       <div class="act ms-1"><span class="act-lbl">Print</span><button class="btn btn-outline-secondary btn-icon" title="Print label"
               onclick="printLabel(${item.product_id}, '${esc(item.name)}')">
         <i class="bi bi-printer"></i>
-      </button></div>` : ''}
+      </button></div>` : ''}`}
     </div>
   `).join('');
 }
@@ -327,6 +393,127 @@ const itemsById = {};
 
 function storeItems(items) {
   items.forEach(i => { itemsById[i.product_id] = i; });
+}
+
+// ── Multi-select (Will, Sept 2026: "batch move stuff to another location or
+// delete/consume multiple items") ──────────────────────────────────────────
+let selectMode = false;
+let selectedIds = new Set();
+let lastDashboardData = null;  // cached server response, so toggling select
+                                // mode / bulk actions can re-render without a
+                                // round-trip except where the data actually changed
+
+function renderAllPanels() {
+  if (!lastDashboardData) return;
+  PANEL_KEYS.forEach(k => renderPanel(`panel-${k}`, `count-${k}`, lastDashboardData[k] || [], k));
+}
+
+function toggleSelectMode() {
+  selectMode = !selectMode;
+  selectedIds.clear();
+  document.getElementById('selectModeBtn').classList.toggle('active', selectMode);
+  document.getElementById('bulkBar').classList.toggle('d-none', !selectMode);
+  document.getElementById('bulkBar').classList.toggle('d-flex', selectMode);
+  updateBulkBar();
+  renderAllPanels();
+}
+
+function toggleSelect(productId) {
+  if (selectedIds.has(productId)) selectedIds.delete(productId);
+  else selectedIds.add(productId);
+  renderAllPanels();
+  updateBulkBar();
+}
+
+function selectAllVisible() {
+  if (!lastDashboardData) return;
+  PANEL_KEYS.forEach(k => (lastDashboardData[k] || []).forEach(i => selectedIds.add(i.product_id)));
+  renderAllPanels();
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const n = selectedIds.size;
+  document.getElementById('bulkCount').textContent = `${n} selected`;
+  ['bulkMoveBtn', 'bulkConsumeBtn', 'bulkTossBtn'].forEach(id => {
+    document.getElementById(id).disabled = n === 0;
+  });
+}
+
+function openBulkMoveModal() {
+  if (!selectedIds.size) return;
+  document.getElementById('bulkMoveCount').textContent = selectedIds.size;
+  new bootstrap.Modal(document.getElementById('bulkMoveModal')).show();
+}
+
+// Moves every selected item's full current quantity to `bucket`. Each item
+// keeps its own from-bucket (read off itemsById, tagged by loadDashboard), so
+// a mixed selection across panels moves correctly in one go.
+async function bulkMove(bucket) {
+  bootstrap.Modal.getInstance(document.getElementById('bulkMoveModal'))?.hide();
+  const ids = [...selectedIds];
+  if (!ids.length) return;
+  let ok = 0, fail = 0;
+  for (const pid of ids) {
+    const item = itemsById[pid];
+    if (!item) continue;
+    try {
+      const r = await fetch(`/inventory/move/${pid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bucket, amount: null, from_bucket: item.bucket || null }),
+      });
+      if (!r.ok) throw new Error(await prErrText(r));
+      ok++;
+    } catch (e) { fail++; }
+  }
+  showToast(`Moved ${ok} item${ok === 1 ? '' : 's'} to ${BUCKET_LABELS[bucket]}${fail ? `, ${fail} failed` : ''}`, fail > 0 && ok === 0);
+  selectedIds.clear();
+  await loadDashboard();
+}
+
+async function bulkConsume() {
+  const ids = [...selectedIds];
+  if (!ids.length) return;
+  if (!confirm(`Mark ${ids.length} item(s) as eaten?`)) return;
+  let ok = 0;
+  for (const pid of ids) {
+    const item = itemsById[pid];
+    if (!item) continue;
+    const fd = new FormData();
+    fd.append('amount', item.amount);
+    try {
+      await fetch(`/ui/consume/${pid}`, { method: 'POST', body: fd, redirect: 'manual' });
+      ok++;
+    } catch (e) { /* counted as not-ok below via the dashboard reload */ }
+  }
+  showToast(`Marked ${ok} item${ok === 1 ? '' : 's'} eaten`);
+  selectedIds.clear();
+  await loadDashboard();
+}
+
+async function bulkToss() {
+  const ids = [...selectedIds];
+  if (!ids.length) return;
+  if (!confirm(`Toss ${ids.length} item(s) as wasted? This removes them from stock and is recorded as spoiled, not eaten.`)) return;
+  let ok = 0, fail = 0;
+  for (const pid of ids) {
+    const item = itemsById[pid];
+    if (!item) continue;
+    try {
+      const r = await fetch(`/expiring/toss/${pid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: item.amount }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) throw new Error(d.detail || r.statusText);
+      ok++;
+    } catch (e) { fail++; }
+  }
+  showToast(`Tossed ${ok} item${ok === 1 ? '' : 's'}${fail ? `, ${fail} failed` : ''}`, fail > 0 && ok === 0);
+  selectedIds.clear();
+  await loadDashboard();
 }
 
 // Edit modal
@@ -515,8 +702,17 @@ async function loadDashboard() {
     const data = await r.json();
     status.classList.add('d-none');
     status.classList.remove('d-flex');
+    // Tag each item with the bucket its own array came from -- bulk actions
+    // need each selected item's current location, and the dashboard response
+    // only implies it by which key an item is under.
+    PANEL_KEYS.forEach(k => (data[k] || []).forEach(i => { i.bucket = k; }));
+    lastDashboardData = data;
     const allItems = PANEL_KEYS.flatMap(k => data[k] || []);
     storeItems(allItems);
+    // A selected item that's gone from the fresh data (moved/consumed/tossed
+    // by something else) shouldn't linger in the bulk-bar count.
+    selectedIds.forEach(id => { if (!(id in itemsById)) selectedIds.delete(id); });
+    updateBulkBar();
     PANEL_KEYS.forEach(k => renderPanel(`panel-${k}`, `count-${k}`, data[k] || [], k));
   } catch(e) {
     document.getElementById('inventory-status-text').textContent = e.message;
@@ -655,7 +851,9 @@ document.addEventListener('click', function (ev) {
   const header = ev.target.closest('[data-toggle-panel]');
   if (header) { togglePanel(header.dataset.togglePanel); return; }
   const moveBtn = ev.target.closest('[data-move-to]');
-  if (moveBtn) moveFromModal(moveBtn.dataset.moveTo);
+  if (moveBtn) { moveFromModal(moveBtn.dataset.moveTo); return; }
+  const bulkMoveBtn = ev.target.closest('[data-bulk-move-to]');
+  if (bulkMoveBtn) bulkMove(bulkMoveBtn.dataset.bulkMoveTo);
 });
 
 // Initial load

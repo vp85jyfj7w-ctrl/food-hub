@@ -252,9 +252,21 @@ body {
    * content in from a panel edge that clips; box-sizing keeps that padding
    * inside the viewport instead of widening the page. See the "Advanced
    * display safe-area insets" block in kiosk-display.js for where these
-   * variables come from. */
+   * variables come from.
+   *
+   * !important on padding-top only (22 Sept 2026, Will: "the top of the
+   * shopping list is cut off"): base.html carries its own unconditional
+   * `body { padding-top: 60px; }` for the non-kiosk single-row navbar, in a
+   * <style> block that sits LATER in <head> than this stylesheet's dynamically
+   * injected <link> (kiosk.css loads via a script tag near the top of <head>,
+   * so it can apply before first paint). Same selector, same specificity, so
+   * plain CSS cascade order let that later, hardcoded 60px silently win over
+   * this rule's --kiosk-navbar-h calc() on every kiosk page -- harmless while
+   * the single-row navbar was close to 60px, but a real content-covering gap
+   * once the nav can wrap to two rows (~107px) and grow again as tabs are
+   * added. Kiosk-only file, so this can't leak into a normal browser. */
   box-sizing: border-box;
-  padding-top: calc(var(--kiosk-navbar-h, 50px) + var(--kiosk-inset-top, 0px));
+  padding-top: calc(var(--kiosk-navbar-h, 50px) + var(--kiosk-inset-top, 0px)) !important;
   padding-left: var(--kiosk-inset-left, 0px);
   padding-right: var(--kiosk-inset-right, 0px);
   padding-bottom: var(--kiosk-inset-bottom, 0px);

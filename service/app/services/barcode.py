@@ -218,6 +218,16 @@ async def lookup_barcode(barcode: str, db: Session) -> FoodItem:
 
     Raises BarcodeNotFound / BarcodeServiceError.
     """
+    # Will's own taught answer (see services/known_barcodes.py) always wins,
+    # checked before Open Food Facts and before the own-item classification
+    # below: once he's named a barcode on the Pending page and committed it,
+    # every later scan should resolve to exactly that, instantly, with no
+    # network round trip and no repeat trip through Pending.
+    from .known_barcodes import lookup as lookup_known
+    taught = lookup_known(barcode, db)
+    if taught is not None:
+        return taught
+
     # A store-assigned/restricted-use code (see is_store_local_barcode) can
     # never be a real, globally-assigned product, so this is checked BEFORE
     # ever calling Open Food Facts -- not just as a fallback once OFF finds

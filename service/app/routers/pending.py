@@ -22,8 +22,8 @@ from ..services.defaults import (apply_defaults, propose_review_best_by,
 from ..services.grocy import (GrocyClient, parse_grocycode, stock_has_product,
                               stock_sniff_candidates)
 from ..services.label_render import prettify_date
-from ..services import (best_by_provenance, expiry_learning, nutrition,
-                        scan_session, scanner_mode, shopping_source)
+from ..services import (best_by_provenance, expiry_learning, known_barcodes,
+                        nutrition, scan_session, scanner_mode, shopping_source)
 from ..services import foodhub_retailers, shopping_session as foodhub_session
 
 logger = logging.getLogger(__name__)
@@ -1300,6 +1300,30 @@ async def commit_pending(body: CommitRequest, request: Request, db: Session = De
             # the row is deleted; never blocks a commit.
             if _capture_learning(row):
                 captured += 1
+            # Food Hub, Sept 2026 ("name it once, know it next time"): teach
+            # this barcode its committed name/category/storage/unit/shelf-life
+            # so services.barcode.lookup_barcode() resolves it instantly next
+            # scan, without Open Food Facts or another trip through Pending.
+            # Every commit re-teaches, so renaming a mis-taught item and
+            # committing again always corrects it. Skipped for Will's own
+            # printed "own item" labels (see known_barcodes.py) and for a row
+            # committed without ever being renamed (still a placeholder name).
+            # Best-effort: never lets a bookkeeping failure fail a commit that
+            # already succeeded against Grocy.
+            if row.barcode and not is_own_item_code(row.barcode):
+                try:
+                    known_barcodes.remember(
+                        db, row.barcode,
+                        name=item.name, brand=item.brand,
+                        category=item.category.value,
+                        storage_type=item.storage_type.value,
+                        unit=item.unit,
+                        best_by_date=(item.best_by_date.isoformat()
+                                     if item.best_by_date else None),
+                        best_by_source=item.best_by_source,
+                    )
+                except Exception:  # noqa: BLE001
+                    db.rollback()
             # Food Hub (FoodHub-0002): tag this purchase with a retailer, read
             # before the row is deleted -- the row's own choice wins, else an
             # active Shopping Session auto-tags it (brief 3.5). Best-effort:

@@ -641,7 +641,7 @@
           <!-- Overflow menu: less-used destinations live here to keep the bar
                uncluttered, which matters most on the small pi_remote screen. -->
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle {% if active in ['setup', 'about', 'defaults'] %}active{% endif %}"
+            <a class="nav-link dropdown-toggle {% if active in ['setup', 'about', 'defaults', 'foodhub_known_barcodes'] %}active{% endif %}"
                href="#" id="moreMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="More">
               <i class="bi bi-three-dots-vertical"></i><span class="d-lg-none ms-2">More</span>
             </a>
@@ -660,6 +660,7 @@
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item {% if active == 'setup' %}active{% endif %}" href="setup"><i class="bi bi-gear me-2"></i>Settings</a></li>
               <li class="kiosk-hide"><a class="dropdown-item {% if active == 'defaults' %}active{% endif %}" href="ui/defaults"><i class="bi bi-table me-2"></i>Defaults</a></li>
+              <li class="kiosk-hide"><a class="dropdown-item {% if active == 'foodhub_known_barcodes' %}active{% endif %}" href="ui/known-barcodes"><i class="bi bi-upc-scan me-2"></i>Known Barcodes</a></li>
               <li class="kiosk-hide"><a class="dropdown-item {% if active == 'about' %}active{% endif %}" href="ui/about"><i class="bi bi-info-circle me-2"></i>About</a></li>
               <li class="kiosk-hide"><hr class="dropdown-divider"></li>
               <li class="kiosk-hide"><a class="dropdown-item" href="https://docs.pantryraider.app" target="_blank" rel="noopener"><i class="bi bi-book me-2"></i>Documentation</a></li>

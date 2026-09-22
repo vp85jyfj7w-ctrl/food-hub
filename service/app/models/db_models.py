@@ -304,6 +304,52 @@ class Retailer(Base):
     active = Column(Integer, default=1)
 
 
+class KnownBarcode(Base):
+    """A barcode Will has taught Food Hub a name for (Food Hub, Sept 2026 --
+    "when something comes up unknown I want to be able to name it and then
+    next time it comes round it will know what the item is").
+
+    Open Food Facts (plus the optional LLM fallback in services/barcode.py)
+    only knows published products: a homemade dish, a small local shop's
+    own-brand item, or a damaged/unreadable label comes back "not found"
+    forever, on every single scan, unless something remembers the answer
+    once a person supplies it. This table is that memory. The FIRST time a
+    barcode's pending row is given a real name and committed to stock
+    (routers/pending.py commit_pending), that name -- plus whatever
+    category/storage/unit/shelf-life it ended up with -- is saved here keyed
+    on the barcode; every later commit re-teaches it, so a correction always
+    sticks too. services.barcode.lookup_barcode() checks this table BEFORE
+    ever calling Open Food Facts, so a taught barcode resolves instantly and
+    correctly without another trip through Pending.
+
+    Deliberately not used for Will's own printed "own item" labels (the GS1
+    store-local/QR-label range, services.barcode.is_own_item_code): those
+    sequence numbers get reused across many different batches over time
+    (this week's label #47 is not last week's #47), so a fixed name per
+    barcode would be actively wrong there -- each own-item scan is named
+    fresh through POST /pending/own-item instead, never through here.
+    """
+    __tablename__ = "foodhub_known_barcodes"
+
+    barcode = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    brand = Column(String, nullable=True)
+    category = Column(String, nullable=True)
+    storage_type = Column(String, nullable=True)
+    unit = Column(String, nullable=True)
+    # Shelf life in days from the day it's taught, so a future scan can
+    # still propose a sensible best-by date to confirm/edit -- not just a
+    # bare name. NULL means "no date suggested", same as any other item.
+    default_shelf_life_days = Column(Integer, nullable=True)
+    taught_at = Column(
+        String, default=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds")
+    )
+    # Bumped every time services.barcode.lookup_barcode() matches this row,
+    # so the management page can show which taught items actually get
+    # rescanned versus a one-off that's just sitting there.
+    scan_count = Column(Integer, default=0)
+
+
 class ProductRetailer(Base):
     """Remembers which retailer a barcode/product is usually bought from
     (Food Hub, FoodHub-0002).

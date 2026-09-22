@@ -721,6 +721,7 @@ class GrocyClient:
             result.append({
                 "product_id": pid,
                 "name": name,
+                "description": product.get("description") or "",
                 "amount": float(entry.get("amount") or 0),
                 "total_amount": float(entry.get("_total_amount") or entry.get("amount") or 0),
                 "unit": product.get("qu_unit_stock", {}).get("name") if product.get("qu_unit_stock") else None,

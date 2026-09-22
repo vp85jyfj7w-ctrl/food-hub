@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, Form, Request
@@ -14,7 +15,7 @@ from ..passwords import verify_secret, looks_hashed
 from .. import totp as local_totp
 from ..database import get_db
 from ..ingress import ingress_path, ingress_redirect
-from ..models.db_models import ExpiryDefault, Retailer
+from ..models.db_models import ExpiryDefault, KnownBarcode, Retailer
 from ..services.grocy import GrocyClient, error_payload
 from ..services.request_origin import is_internet_origin, has_forwarding_headers
 from ..storage_categories import all_categories, OTHER
@@ -826,6 +827,94 @@ def delete_retailer_ui(request: Request, retailer_id: int, db: Session = Depends
         db.delete(row)
         db.commit()
     return ingress_redirect(request, "/ui/retailers?msg=Retailer+deleted.&msg_type=warning")
+
+
+@router.get("/known-barcodes", response_class=HTMLResponse)
+def known_barcodes_page(request: Request, db: Session = Depends(get_db)):
+    """Barcodes Will has taught Food Hub a name for (Food Hub, Sept 2026 --
+    "when something comes up unknown I want to be able to name it and then
+    next time it comes round it will know what the item is"). Rows are
+    normally added automatically -- the first time a Pending item is renamed
+    and committed to stock -- but this page also lets one be added, fixed, or
+    removed by hand. See services/known_barcodes.py and KnownBarcode in
+    models/db_models.py for the full mechanism."""
+    rows = db.query(KnownBarcode).order_by(KnownBarcode.taught_at.desc()).all()
+    return templates.TemplateResponse(request, "known_barcodes.html", {
+        "request": request,
+        "rows": rows,
+        "active": "foodhub_known_barcodes",
+        "message": request.query_params.get("msg"),
+        "message_type": request.query_params.get("msg_type", "success"),
+    })
+
+
+@router.post("/known-barcodes/create")
+def create_known_barcode(
+    request: Request,
+    barcode: str = Form(...),
+    name: str = Form(...),
+    brand: Optional[str] = Form(None),
+    category: str = Form(...),
+    storage_type: str = Form(...),
+    unit: str = Form("item"),
+    default_shelf_life_days: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+):
+    barcode = barcode.strip()
+    name = name.strip()
+    if not barcode or not name:
+        return ingress_redirect(
+            request,
+            "/ui/known-barcodes?msg=A+barcode+and+a+name+are+both+required.&msg_type=warning",
+        )
+    row = db.query(KnownBarcode).filter(KnownBarcode.barcode == barcode).first()
+    if row is None:
+        row = KnownBarcode(barcode=barcode, scan_count=0)
+        db.add(row)
+    row.name = name
+    row.brand = (brand or "").strip() or None
+    row.category = category
+    row.storage_type = storage_type
+    row.unit = (unit or "item").strip() or "item"
+    row.default_shelf_life_days = default_shelf_life_days or None
+    row.taught_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    db.commit()
+    return ingress_redirect(request, "/ui/known-barcodes?msg=Barcode+taught.")
+
+
+@router.post("/known-barcodes/{barcode}/update")
+def update_known_barcode(
+    request: Request,
+    barcode: str,
+    name: str = Form(...),
+    brand: Optional[str] = Form(None),
+    category: str = Form(...),
+    storage_type: str = Form(...),
+    unit: str = Form("item"),
+    default_shelf_life_days: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+):
+    row = db.query(KnownBarcode).filter(KnownBarcode.barcode == barcode).first()
+    if row:
+        row.name = name.strip() or row.name
+        row.brand = (brand or "").strip() or None
+        row.category = category
+        row.storage_type = storage_type
+        row.unit = (unit or "item").strip() or "item"
+        row.default_shelf_life_days = default_shelf_life_days or None
+        db.commit()
+    return ingress_redirect(request, "/ui/known-barcodes?msg=Barcode+updated.")
+
+
+@router.post("/known-barcodes/{barcode}/delete")
+def delete_known_barcode(request: Request, barcode: str, db: Session = Depends(get_db)):
+    row = db.query(KnownBarcode).filter(KnownBarcode.barcode == barcode).first()
+    if row:
+        db.delete(row)
+        db.commit()
+    return ingress_redirect(
+        request, "/ui/known-barcodes?msg=Forgotten.+It+will+go+through+lookup+again+next+scan.&msg_type=warning"
+    )
 
 
 @router.get("/convert", response_class=HTMLResponse)

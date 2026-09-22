@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Known Barcodes: {{ app_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center my-3">
+  <h4 class="mb-0"><i class="bi bi-upc-scan me-2"></i>Known Barcodes</h4>
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal">
+    <i class="bi bi-plus-lg me-1"></i>Teach a Barcode
+  </button>
+</div>
+
+<p class="text-secondary small">
+  When a scan comes back unknown, name it once on the Pending page and commit
+  it &ndash; Food Hub remembers that barcode from then on, so the next scan
+  resolves straight away instead of going to Pending again. This page shows
+  everything it's learned so far; you can also teach one by hand here, or fix
+  or forget one that got named wrong. Re-scanning and committing a barcode
+  again with a different name always corrects it.
+</p>
+
+{% if message %}
+<div class="alert alert-{{ message_type }}">{{ message }}</div>
+{% endif %}
+
+<div class="row g-2 mb-3">
+  <div class="col">
+    <input type="text" class="form-control form-control-sm" id="filterSearch"
+           placeholder="Search barcode or name..." oninput="filterTable()">
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle" id="knownTable">
+    <thead>
+      <tr>
+        <th>Barcode</th>
+        <th>Name</th>
+        <th>Category</th>
+        <th>Storage</th>
+        <th>Shelf life</th>
+        <th>Matched</th>
+        <th>Taught</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr data-search="{{ row.barcode }} {{ row.name }}">
+        <td><code>{{ row.barcode }}</code></td>
+        <td>{{ row.name }}{% if row.brand %} <span class="text-muted small">({{ row.brand }})</span>{% endif %}</td>
+        <td><span class="badge bg-secondary">{{ row.category or '–' }}</span></td>
+        <td>
+          {% if row.storage_type == 'refrigerated' %}<span class="badge text-bg-info">Refrigerated</span>
+          {% elif row.storage_type == 'frozen' %}<span class="badge text-bg-primary">Frozen</span>
+          {% elif row.storage_type == 'room_temp' %}<span class="badge text-bg-warning">Room Temp</span>
+          {% elif row.storage_type == 'dry' %}<span class="badge text-bg-secondary">Dry</span>
+          {% else %}&ndash;{% endif %}
+        </td>
+        <td>{% if row.default_shelf_life_days %}{{ row.default_shelf_life_days }} days{% else %}&ndash;{% endif %}</td>
+        <td>{{ row.scan_count or 0 }}&times;</td>
+        <td class="text-muted small">{{ row.taught_at[:10] if row.taught_at else '–' }}</td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-secondary btn-icon me-1"
+                  data-edit-known
+                  data-barcode="{{ row.barcode }}"
+                  data-name="{{ row.name }}"
+                  data-brand="{{ row.brand or '' }}"
+                  data-category="{{ row.category or 'Other' }}"
+                  data-storage="{{ row.storage_type or 'refrigerated' }}"
+                  data-unit="{{ row.unit or 'item' }}"
+                  data-days="{{ row.default_shelf_life_days or '' }}"
+                  title="Edit">
+            <i class="bi bi-pencil"></i>
+          </button>
+          <form method="post" action="ui/known-barcodes/{{ row.barcode }}/delete" class="d-inline"
+                onsubmit="return confirm('Forget this barcode? The next scan will go through the normal lookup (and Pending, if that fails) again.')">
+            <button type="submit" class="btn btn-sm btn-outline-danger btn-icon" title="Forget">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="text-center text-secondary py-4">
+        Nothing taught yet &ndash; rename an unknown item on the Pending page and commit it, and it'll show up here.
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="ui/known-barcodes/create">
+        <div class="modal-header">
+          <h5 class="modal-title">Teach a Barcode</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Barcode</label>
+            <input type="text" class="form-control" name="barcode" placeholder="e.g. 5000112637922" required>
+          </div>
+          {% include "_known_barcode_fields.html" %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" id="editKnownForm" action="">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Known Barcode</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">Barcode <code id="editKnownBarcodeLabel"></code> (can't be changed here &ndash; forget it and re-teach it under a different barcode if you scanned it wrong).</p>
+          {% include "_known_barcode_fields.html" %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterTable() {
+  const search = document.getElementById('filterSearch').value.toLowerCase();
+  document.querySelectorAll('#knownTable tbody tr').forEach(row => {
+    if (!row.dataset.search) return;
+    row.style.display = row.dataset.search.toLowerCase().includes(search) ? '' : 'none';
+  });
+}
+
+document.addEventListener('click', function (ev) {
+  const btn = ev.target.closest('[data-edit-known]');
+  if (!btn) return;
+  const d = btn.dataset;
+  const form = document.getElementById('editKnownForm');
+  form.action = `ui/known-barcodes/${encodeURIComponent(d.barcode)}/update`;
+  document.getElementById('editKnownBarcodeLabel').textContent = d.barcode;
+  form.querySelector('[name=name]').value = d.name || '';
+  form.querySelector('[name=brand]').value = d.brand || '';
+  form.querySelector('[name=category]').value = d.category || 'Other';
+  form.querySelector('[name=storage_type]').value = d.storage || 'refrigerated';
+  form.querySelector('[name=unit]').value = d.unit || 'item';
+  form.querySelector('[name=default_shelf_life_days]').value = d.days || '';
+  new bootstrap.Modal(document.getElementById('editModal')).show();
+});
+</script>
+{% endblock %}

@@ -166,7 +166,7 @@
 
 <div class="row g-3" id="panels">
   {% for c in panels %}
-  <div class="col-md-6" id="col-{{ c.key }}">
+  <div class="col-12" id="col-{{ c.key }}">
     <div class="border rounded panel-{{ c.key }}" style="border-width:1px !important"
          data-bucket="{{ c.key }}"
          {% if c.key != 'other' %}ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropItem(event)"{% endif %}>

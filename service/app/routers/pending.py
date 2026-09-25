@@ -746,8 +746,29 @@ def _spawn_enrichment(item_id: int, barcode: str) -> None:
     asyncio.create_task(enrich_pending_item(item_id, barcode))
 
 
+def _apply_storage_override(item: FoodItem, storage: Optional[str], db: Session,
+                            recompute_date: bool) -> None:
+    """Food Hub, Sept 2026: the phone scan page's "Adding to" picker (e.g.
+    Freezer) puts an item where the person is actually standing, instead of
+    wherever the product lookup guessed. With recompute_date, the suggested
+    best-by follows the chosen area's shelf-life rule, so a freezer add shows
+    a freezer-length date rather than the fridge one."""
+    if not storage or storage not in StorageType._value2member_map_:
+        return
+    new = StorageType(storage)
+    if new == item.storage_type:
+        return
+    item.storage_type = new
+    if recompute_date:
+        days = resolve_rule_days(db, item.name, item.category.value, new.value)
+        if days is not None:
+            item.best_by_date = date.today() + timedelta(days=days)
+            item.best_by_source = "default"
+
+
 @router.get("/lookup")
-async def lookup_for_confirm(barcode: str, request: Request, db: Session = Depends(get_db)):
+async def lookup_for_confirm(barcode: str, request: Request, db: Session = Depends(get_db),
+                             storage: Optional[str] = None):
     """Resolve a barcode to a proposed item, read-only, for the "scan, confirm
     date, add" flow (Food Hub, Sept 2026): the caller shows the person this
     name and suggested best-by date, lets them edit the date, then posts the
@@ -778,6 +799,7 @@ async def lookup_for_confirm(barcode: str, request: Request, db: Session = Depen
                 "default_best_by_date": default_date}
     except (BarcodeNotFound, BarcodeServiceError):
         return {"status": "not_found", "barcode": barcode}
+    _apply_storage_override(item, storage, db, recompute_date=True)
     return {
         "status": "found",
         "barcode": barcode,
@@ -798,6 +820,9 @@ class QuickAddConfirm(BaseModel):
     # the person confirmed or edited on the "scan, confirm date, add" prompt.
     best_by_date: Optional[str] = None
     source: str = "scanner"
+    # Food Hub, Sept 2026: "Adding to" override from the phone scan page
+    # (refrigerated / frozen / room_temp / dry). None = lookup's own guess.
+    storage_type: Optional[str] = None
 
 
 @router.post("/quick-add")
@@ -833,6 +858,8 @@ async def quick_add_confirmed(body: QuickAddConfirm, request: Request,
             status_code=200)
 
     item.quantity = body.quantity
+    _apply_storage_override(item, body.storage_type, db,
+                            recompute_date=body.best_by_date is None)
     if body.best_by_date is not None:
         if body.best_by_date == "":
             item.best_by_date = None

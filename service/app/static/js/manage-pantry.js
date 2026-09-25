@@ -272,10 +272,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // A non-secure origin makes the browser drop getUserMedia entirely, which
     // used to look identical to "no camera hardware" -- the only sign anything
     // was different was a small muted caption underneath. The banner's link is
-    // a fixed address (the Food Hub Scanner Netlify page, see add.html) rather
-    // than anything looked up from Settings: Food Hub's own https address
-    // forces a 2FA login wall for any off-network visit, which defeats the
-    // point of pointing someone at it just to scan a barcode.
+    // a fixed address (Food Hub's direct-TLS :9294 address, see add.html)
+    // rather than anything looked up from Settings: the Caddy-proxied https
+    // address forces a 2FA login wall, which defeats the point of pointing
+    // someone at it just to scan a barcode.
     if (!window.isSecureContext) {
       const notice = document.getElementById('insecure-camera-notice');
       const hint = document.getElementById('camera-hint-default');

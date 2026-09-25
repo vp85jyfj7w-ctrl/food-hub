@@ -207,21 +207,20 @@
               Hold the barcode flat, a few inches from the camera, centered in the box.
             </div>
             {# Shown instead of the muted line above when JS confirms this page really
-               is on an insecure origin (manage-pantry.js) -- that's the exact situation
-               that silently hid the Start Camera button with no visible explanation why
-               (Will, Sept 2026). Points at the dedicated Food Hub Scanner page instead of
-               Food Hub's own https address: that address forces a 2FA login wall for any
-               off-network visit (deliberate, not a bug), which is exactly the friction the
-               scanner page exists to avoid -- Will hit that wall directly and flagged it
-               (Sept 2026), so this link must never point back at it. #}
+               is on an insecure origin (manage-pantry.js), e.g. the plain-http LAN
+               address. Points at Food Hub's own direct-TLS address on port 9294
+               (foodassistant-service-tls: real cert, no proxy in front, so no 2FA
+               wall; needs Tailscale on). The old Netlify scan bridge this used to
+               link to was retired Sept 2026 (Will wanted nothing on Netlify, and the
+               site was gone), so don't point this back at it. Never point it at
+               foodhub.tailda9032.ts.net either: that goes through Caddy and forces 2FA. #}
             <div class="alert alert-warning py-2 small mt-2 d-none" id="insecure-camera-notice">
               <i class="bi bi-shield-lock me-1"></i>
               This page opened over a plain (non-secure) connection, so the browser
               won't allow live camera scanning here.
-              <a href="https://foodhub-scan-bridge.netlify.app" id="insecure-camera-link"
-                 class="alert-link" target="_blank" rel="noopener">Open the Food Hub Scanner</a>
-              instead -- no extra login needed, and scans go straight to your Pending list
-              or stock the same as scanning here.
+              <a href="https://ugreen-nas.tailda9032.ts.net:9294/ui/add" id="insecure-camera-link"
+                 class="alert-link">Open Food Hub's secure address</a>
+              instead (Tailscale needs to be on) -- camera scanning works there.
             </div>
           </div>
         </div>

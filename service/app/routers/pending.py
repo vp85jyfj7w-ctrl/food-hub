@@ -25,6 +25,7 @@ from ..services.label_render import prettify_date
 from ..services import (best_by_provenance, expiry_learning, known_barcodes,
                         nutrition, scan_session, scanner_mode, shopping_source)
 from ..services import foodhub_retailers, shopping_session as foodhub_session
+from ..services import off_contribute
 
 logger = logging.getLogger(__name__)
 
@@ -395,6 +396,10 @@ class PendingUpdate(BaseModel):
 
 class CommitRequest(BaseModel):
     ids: Optional[list[int]] = None   # None = commit everything
+    # Food Hub, Sept 2026: rows whose "Also add to Open Food Facts" box was
+    # ticked. Shared in the background after a successful commit, create-only
+    # (see services/off_contribute.py).
+    share_off_ids: Optional[list[int]] = None
 
 
 def _row_dict(row: PendingItem, duplicate: bool = False,
@@ -424,6 +429,11 @@ def _row_dict(row: PendingItem, duplicate: bool = False,
         # pending card should prompt for a photo instead of the usual
         # "lookup failed, fix the name" hint.
         "store_local": bool(row.barcode) and is_own_item_code(row.barcode),
+        # Food Hub, Sept 2026: show the "Also add to Open Food Facts" box on a
+        # row that Open Food Facts didn't know, only when an account is set up.
+        "off_shareable": (bool(row.lookup_failed)
+                          and off_contribute.shareable(row.barcode)
+                          and off_contribute.enabled()),
         # True when this product already has stock in Grocy. Informational only:
         # the item can still be committed, and a commit on a different day lands a
         # separate stock entry so each scan keeps its own expiration.
@@ -1278,6 +1288,7 @@ async def commit_pending(body: CommitRequest, request: Request, db: Session = De
     grocy = GrocyClient()
     results = []
     captured = 0
+    off_sent = 0
     for row in rows:
         row_id = row.id
         try:
@@ -1330,6 +1341,9 @@ async def commit_pending(body: CommitRequest, request: Request, db: Session = De
             # bookkeeping here must never fail the commit that already
             # succeeded against Grocy.
             row_barcode, row_retailer_id = row.barcode, row.retailer_id
+            if body.share_off_ids and row_id in body.share_off_ids and row_barcode:
+                if off_contribute.contribute_in_background(row_barcode, item.name, item.brand):
+                    off_sent += 1
             db.delete(row)
             db.commit()
             results.append({"id": row_id, "status": "ok", **result})
@@ -1375,4 +1389,5 @@ async def commit_pending(body: CommitRequest, request: Request, db: Session = De
     return {
         "imported": len([r for r in results if r["status"] == "ok"]),
         "results": results,
+        "off_sent": off_sent,
     }

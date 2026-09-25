@@ -167,6 +167,13 @@ async function loadPending() {
             <input class="form-control form-control-sm ${item.lookup_failed ? 'border-warning' : ''}"
                    value="${esc(item.name)}" placeholder="Name"
                    onchange="patchItem(${item.id}, 'name', this.value, this)">
+            ${item.off_shareable ? `
+            <div class="form-check small mt-1 mb-0" title="Shares the barcode, name and brand publicly on Open Food Facts, only if they don't already have this product. Untick for a casual name.">
+              <input class="form-check-input off-share" type="checkbox" checked
+                     id="off-share-${item.id}" data-id="${item.id}">
+              <label class="form-check-label text-secondary" for="off-share-${item.id}">
+                Also add to Open Food Facts</label>
+            </div>` : ''}
           </div>
           <div class="col-4 col-md-1">
             <input class="form-control form-control-sm" type="number" value="${item.quantity}"
@@ -372,6 +379,14 @@ async function commitAll() {
   await doCommit(null);
 }
 
+// Rows being committed whose "Also add to Open Food Facts" box is ticked
+// (Food Hub, Sept 2026). ids === null means "commit everything".
+function shareOffIds(ids) {
+  return [...document.querySelectorAll('.off-share:checked')]
+    .map(el => parseInt(el.dataset.id, 10))
+    .filter(id => ids === null || ids.includes(id));
+}
+
 async function doCommit(ids) {
   document.getElementById('commit-status').innerHTML =
     '<div class="alert alert-info py-1 px-2 small"><span class="spinner-border spinner-border-sm me-1"></span>Committing…</div>';
@@ -379,13 +394,14 @@ async function doCommit(ids) {
     const r = await fetch('pending/commit', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ ids }),
+      body: JSON.stringify({ ids, share_off_ids: shareOffIds(ids) }),
     });
     const d = await r.json();
     const errs = (d.results || []).filter(x => x.status === 'error');
     if (errs.length === 0) {
       document.getElementById('commit-status').innerHTML = '';
-      showToast(`✓ Added ${d.imported} item(s) to your inventory`);
+      showToast(`✓ Added ${d.imported} item(s) to your inventory`
+        + (d.off_sent ? `, and shared ${d.off_sent} with Open Food Facts` : ''));
     } else {
       document.getElementById('commit-status').innerHTML =
         `<div class="alert alert-warning py-1 px-2 small">${d.imported} imported, ${errs.length} failed: ${errs.map(x => esc(x.error)).join('; ')}</div>`;

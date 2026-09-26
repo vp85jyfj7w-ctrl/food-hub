@@ -487,6 +487,7 @@ async def _is_duplicate(name: str) -> bool:
 
 class BatchStart(BaseModel):
     area: str = "frozen"
+    ask_date: bool = False
 
 
 @router.get("/batch")
@@ -498,7 +499,7 @@ async def batch_state():
 @router.post("/batch")
 async def batch_start(body: BatchStart):
     try:
-        return batch_add.start(body.area)
+        return batch_add.start(body.area, body.ask_date)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -926,6 +927,11 @@ async def quick_add_confirmed(body: QuickAddConfirm, request: Request,
             {"status": "commit_failed", "barcode": barcode,
              "error": "Could not reach Grocy. Try again in a moment."},
             status_code=200)
+    # Batch add with "Ask me the date": the confirmed add still counts
+    # towards the batch and keeps it from timing out.
+    if body.storage_type and body.storage_type == batch_add.active_area():
+        batch_add.touch(added=True)
+        outcome = {**outcome, "batch_area": body.storage_type}
     return outcome
 
 

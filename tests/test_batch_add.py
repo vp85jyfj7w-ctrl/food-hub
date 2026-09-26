@@ -137,3 +137,18 @@ def test_stop_and_bad_area(client, world):
     client.post("pending/batch", json={"area": "frozen"})
     assert client.delete("pending/batch").json()["active"] is False
     assert client.post("pending/batch", json={"area": "garage"}).status_code == 400
+
+
+def test_ask_date_setting_and_confirmed_add_counts(client, world):
+    s = client.post("pending/batch", json={"area": "frozen", "ask_date": True}).json()
+    assert s["ask_date"] is True and s["count"] == 0
+    when = (date.today() + timedelta(days=150)).isoformat()
+    r = client.post("pending/quick-add", json={"barcode": KNOWN, "best_by_date": when,
+                                               "storage_type": "frozen"}).json()
+    assert r["status"] == "instant_added" and r["batch_area"] == "frozen"
+    assert world[-1].storage_type.value == "frozen"
+    assert world[-1].best_by_date.isoformat() == when
+    assert client.get("pending/batch").json()["count"] == 1
+    # Unticking keeps the running count for the same area.
+    s = client.post("pending/batch", json={"area": "frozen", "ask_date": False}).json()
+    assert s["ask_date"] is False and s["count"] == 1

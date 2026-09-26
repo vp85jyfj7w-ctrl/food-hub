@@ -314,7 +314,7 @@ async function submitScan(code) {
   if (!code) return;
   // Batch add on: nobody is at the screen to answer the date prompt, so the
   // scan goes to the server, which files it in the batch area by itself.
-  if (currentMode === 'inventory' && !BATCH.active
+  if (currentMode === 'inventory' && (!BATCH.active || BATCH.ask_date)
       && !code.toLowerCase().startsWith(_GROCYCODE_PREFIX)) {
     return confirmAndQuickAdd(code);
   }
@@ -633,7 +633,8 @@ async function confirmAndQuickAdd(code) {
     '<span class="spinner-border spinner-border-sm me-1"></span>Looking up...', 'info');
   let data;
   try {
-    const r = await fetch('pending/lookup?barcode=' + encodeURIComponent(code));
+    const r = await fetch('pending/lookup?barcode=' + encodeURIComponent(code)
+      + (BATCH.active ? '&storage=' + encodeURIComponent(BATCH.area) : ''));
     data = await r.json();
   } catch (e) {
     showStatus('barcode-status', 'Lookup failed: ' + esc(String(e)), 'danger');
@@ -654,9 +655,10 @@ async function confirmAndQuickAdd(code) {
   _confirmPending = { code };
   _confirmDateIso = data.best_by_date || '';
   document.getElementById('quickAddConfirmName').textContent = data.name || code;
-  document.getElementById('quickAddConfirmHint').textContent = data.best_by_date
+  document.getElementById('quickAddConfirmHint').textContent = (BATCH.active
+    ? 'Going into the ' + (BATCH_LABELS[BATCH.area] || BATCH.area) + '. ' : '') + (data.best_by_date
     ? 'Suggested from the product itself -- tap a different day if the pack in your hand differs.'
-    : 'No date could be worked out -- pick the one on the pack, or leave it blank.';
+    : 'No date could be worked out -- pick the one on the pack, or leave it blank.');
   _confirmCal = buildCalendar(document.getElementById('quickAddCal'), _confirmDateIso,
     function (iso) { _confirmDateIso = iso; });
   showStatus('barcode-status', '', 'info');
@@ -708,7 +710,8 @@ async function onQuickAddConfirmed() {
     const r = await fetch('pending/quick-add', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ barcode: code, quantity: 1, best_by_date: dateVal }),
+      body: JSON.stringify({ barcode: code, quantity: 1, best_by_date: dateVal,
+                             storage_type: BATCH.active ? BATCH.area : null }),
     });
     result = await r.json();
   } catch (e) {
@@ -1348,11 +1351,14 @@ function paintBatch() {
     b.classList.toggle('active', on);
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
+  var ask = document.getElementById('batch-ask-date');
+  if (ask) { ask.checked = !!BATCH.ask_date; ask.disabled = !BATCH.active; }
   card.classList.toggle('border-info', !!BATCH.active);
   card.classList.toggle('border-2', !!BATCH.active);
   if (BATCH.active) {
     desc.innerHTML = '<strong class="text-info">On: every scan goes into the '
-      + esc(BATCH.label || BATCH.area) + '</strong> with its own date'
+      + esc(BATCH.label || BATCH.area) + '</strong>'
+      + (BATCH.ask_date ? ', asking you the date each time' : ' with its own date')
       + (BATCH.count ? ' &middot; ' + BATCH.count + ' added so far' : '')
       + '. Anything it doesn\'t recognise waits on Pending. Turns itself off after '
       + (BATCH.idle_minutes || 60) + ' minutes with no scans.';
@@ -1383,6 +1389,15 @@ async function refreshBatch() {
         : await fetch('pending/batch', { method: 'DELETE' });
       if (r.ok) { BATCH = await r.json(); paintBatch(); }
     } catch (e2) { /* network blip: the poll below corrects the card */ }
+  });
+  var ask = document.getElementById('batch-ask-date');
+  if (ask) ask.addEventListener('change', async function () {
+    if (!BATCH.active) return;
+    try {
+      var r = await fetch('pending/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                             body: JSON.stringify({ area: BATCH.area, ask_date: ask.checked }) });
+      if (r.ok) { BATCH = await r.json(); paintBatch(); }
+    } catch (e) { /* the poll corrects the card */ }
   });
   refreshBatch();
   setInterval(refreshBatch, 30000);

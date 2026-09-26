@@ -72,13 +72,23 @@ def state() -> dict:
         "until": float(data.get("until") or 0) if area else None,
         "count": int(data.get("count") or 0) if area else 0,
         "idle_minutes": IDLE_MINUTES,
+        # Will, 26 Sept 2026, scanning at the MacBook with a screen in front of
+        # him: still file into the batch area, but show the date calendar for
+        # each item first. Only the Manage Pantry page can ask, so scans from
+        # anywhere else still go in with the area's default date.
+        "ask_date": bool(data.get("ask_date")) if area else False,
     }
 
 
-def start(area: str) -> dict:
+def start(area: str, ask_date: bool = False) -> dict:
     if area not in AREAS:
         raise ValueError(f"unknown storage area {area!r}")
-    _write({"area": area, "until": time.time() + IDLE_MINUTES * 60, "count": 0})
+    old = _read()
+    # Re-sending the same area (e.g. ticking "Ask me the date") keeps the
+    # running count rather than starting it again.
+    count = int(old.get("count") or 0) if old.get("area") == area and active_area() else 0
+    _write({"area": area, "until": time.time() + IDLE_MINUTES * 60,
+            "count": count, "ask_date": bool(ask_date)})
     return state()
 
 

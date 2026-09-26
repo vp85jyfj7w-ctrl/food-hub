@@ -604,6 +604,9 @@ function ensureConfirmModal() {
     '<div class="modal-header"><h5 class="modal-title" id="quickAddConfirmName">Item</h5></div>' +
     '<div class="modal-body">' +
     '<input type="text" class="form-control mb-2 d-none" id="quickAddDescInput" placeholder="What is this?">' +
+    '<input type="text" class="form-control mb-1" id="quickAddDateInput" inputmode="numeric" autocomplete="off" ' +
+    'placeholder="Type the date, e.g. 150327 or 15/03/27 or 03/27, then Enter">' +
+    '<div class="form-text mt-0 mb-2" id="quickAddDateParsed">Or tap a day below. Enter on its own keeps the suggested date.</div>' +
     '<div id="quickAddCal"></div>' +
     '<div class="d-flex justify-content-between align-items-start mt-2">' +
     '<div class="form-text mb-0" id="quickAddConfirmHint"></div>' +
@@ -623,6 +626,94 @@ function ensureConfirmModal() {
     _confirmDateIso = '';
     if (_confirmCal) _confirmCal.clear();
   });
+  // Typed date (Will, 26 Sept 2026: "could we just type it, it will be
+  // quicker"). Each keystroke re-reads the box and moves the calendar to
+  // match; Enter adds the item. Enter on an empty box keeps the suggested date.
+  const dateInput = document.getElementById('quickAddDateInput');
+  const parsedEl = document.getElementById('quickAddDateParsed');
+  dateInput.addEventListener('input', function () {
+    const txt = dateInput.value.trim();
+    if (!txt) {
+      parsedEl.textContent = 'Or tap a day below. Enter on its own keeps the suggested date.';
+      parsedEl.classList.remove('text-danger');
+      return;
+    }
+    const iso = parseTypedDate(txt);
+    if (iso) {
+      _confirmDateIso = iso;
+      _confirmCal = buildCalendar(document.getElementById('quickAddCal'), iso,
+        function (picked) { _confirmDateIso = picked; dateInput.value = ''; });
+      parsedEl.textContent = '= ' + new Date(iso + 'T12:00:00').toLocaleDateString('en-GB',
+        { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) + ' (press Enter to add)';
+      parsedEl.classList.remove('text-danger');
+    } else {
+      parsedEl.textContent = 'Keep typing: day/month/year, or month/year for "best before end"';
+      parsedEl.classList.add('text-danger');
+    }
+  });
+  dateInput.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const txt = dateInput.value.trim();
+    if (txt && !parseTypedDate(txt)) return;  // leave the red hint showing
+    onQuickAddConfirmed();
+  });
+  _confirmModalEl.addEventListener('show.bs.modal', function () {
+    dateInput.value = '';
+    parsedEl.textContent = 'Or tap a day below. Enter on its own keeps the suggested date.';
+    parsedEl.classList.remove('text-danger');
+  });
+  _confirmModalEl.addEventListener('shown.bs.modal', function () {
+    // On the kitchen kiosk, focusing would pop the on-screen keyboard up for
+    // every scan, so only jump into the box on a normal computer; own-item
+    // labels focus their description box instead.
+    const kiosk = (function () { try { return localStorage.getItem('kioskMode') === 'true'; } catch (e) { return false; } })();
+    if (!kiosk && document.getElementById('quickAddDescInput').classList.contains('d-none')) {
+      dateInput.focus();
+    }
+  });
+}
+
+// "150327", "15/03/27", "15.3.2027", "15 3 27" -> 2027-03-15. "03/27" or
+// "0327" -> 2027-03-31 (packs often say "best before end 03/27"). "15/03" ->
+// this year, or next year if that day has passed. null if not a real date.
+function parseTypedDate(txt) {
+  let d, m, y;
+  const t = txt.replace(/\s+/g, ' ').trim();
+  let parts = t.split(/[\/.\- ]+/).filter(Boolean);
+  if (parts.length === 1 && /^\d+$/.test(parts[0])) {
+    const n = parts[0];
+    if (n.length === 6) parts = [n.slice(0, 2), n.slice(2, 4), n.slice(4)];
+    else if (n.length === 8) parts = [n.slice(0, 2), n.slice(2, 4), n.slice(4)];
+    else if (n.length === 4) parts = [n.slice(0, 2), n.slice(2)];
+    else return null;
+  }
+  if (!parts.every(p => /^\d+$/.test(p))) return null;
+  const today = new Date();
+  const fullYear = function (v) { v = parseInt(v, 10); return v < 100 ? 2000 + v : v; };
+  if (parts.length === 3) {
+    d = parseInt(parts[0], 10); m = parseInt(parts[1], 10); y = fullYear(parts[2]);
+  } else if (parts.length === 2) {
+    const a = parseInt(parts[0], 10);
+    // month/year only when that reads as this year or later ("05/27" = end
+    // of May 2027); otherwise it is day/month ("05/11" = 5 November).
+    if (a >= 1 && a <= 12 && (parts[1].length === 2 || parts[1].length === 4)
+        && fullYear(parts[1]) >= today.getFullYear()) {
+      // month/year: last day of that month
+      m = a; y = fullYear(parts[1]);
+      d = new Date(y, m, 0).getDate();
+    } else {
+      d = a; m = parseInt(parts[1], 10); y = today.getFullYear();
+      const cand = new Date(y, m - 1, d);
+      if (cand < new Date(today.getFullYear(), today.getMonth(), today.getDate())) y += 1;
+    }
+  } else {
+    return null;
+  }
+  if (!(m >= 1 && m <= 12 && d >= 1 && y >= 2000 && y <= 2100)) return null;
+  const dt = new Date(y, m - 1, d);
+  if (dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+  return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
 }
 
 async function confirmAndQuickAdd(code) {

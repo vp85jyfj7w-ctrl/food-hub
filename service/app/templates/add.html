@@ -159,6 +159,31 @@
 <!-- ============================= Stock up ============================= -->
 <div id="mode-pane-inventory">
 
+<!-- Batch add (Food Hub, Sept 2026): stock a freezer in another room with the
+     wireless scanner alone. While on, every Stock-up scan goes straight into
+     the chosen area with that area's date, no prompt. Server-side state
+     (services/batch_add.py), so it applies to every scan source; switches
+     itself off after an hour with no scans. -->
+<div class="card mb-3" id="batch-card">
+  <div class="card-body py-2">
+    <div class="d-flex align-items-center flex-wrap gap-2">
+      <div class="me-auto" style="min-width:14rem">
+        <strong><i class="bi bi-box-seam me-1"></i>Batch add</strong>
+        <div class="small text-secondary" id="batch-desc">
+          Scanning away from this screen? Pick where it is all going: each scan
+          goes straight into stock there, with no date prompt.
+        </div>
+      </div>
+      <div class="btn-group" role="group" aria-label="Batch add area" id="batch-buttons">
+        <button type="button" class="btn btn-outline-secondary" data-area="">Off</button>
+        <button type="button" class="btn btn-outline-info" data-area="frozen"><i class="bi bi-snow me-1"></i>Freezer</button>
+        <button type="button" class="btn btn-outline-info" data-area="refrigerated"><i class="bi bi-thermometer-low me-1"></i>Fridge</button>
+        <button type="button" class="btn btn-outline-info" data-area="dry"><i class="bi bi-box me-1"></i>Cupboard</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Input-method tabs (within Stock up): barcode, photo, manual -->
 <ul class="nav nav-tabs mb-3" id="inputTabs">
   <li class="nav-item">

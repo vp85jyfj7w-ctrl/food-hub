@@ -26,6 +26,7 @@ from ..services import (best_by_provenance, expiry_learning, known_barcodes,
                         nutrition, scan_session, scanner_mode, shopping_source)
 from ..services import foodhub_retailers, shopping_session as foodhub_session
 from ..services import off_contribute
+from ..services import batch_add
 
 logger = logging.getLogger(__name__)
 
@@ -484,6 +485,29 @@ async def _is_duplicate(name: str) -> bool:
         return False
 
 
+class BatchStart(BaseModel):
+    area: str = "frozen"
+
+
+@router.get("/batch")
+async def batch_state():
+    """Batch add state for the Manage Pantry card (Food Hub, Sept 2026)."""
+    return batch_add.state()
+
+
+@router.post("/batch")
+async def batch_start(body: BatchStart):
+    try:
+        return batch_add.start(body.area)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.delete("/batch")
+async def batch_stop():
+    return batch_add.stop()
+
+
 @router.post("/scan")
 async def scan_barcode(body: ScanRequest, request: Request, db: Session = Depends(get_db)):
     """Headless scanner entry point: look up the barcode and queue it as pending.
@@ -621,6 +645,27 @@ async def scan_barcode(body: ScanRequest, request: Request, db: Session = Depend
     # through to the ordinary pending-queue code below rather than risk
     # committing a guess straight to Grocy (brief's "manual always wins" and
     # "never lose a scan" principles apply here too).
+    # Food Hub, Sept 2026 "batch add": stocking a freezer in another room with
+    # just the wireless scanner, nobody at the screen to confirm a date. While
+    # batch add is on, a resolved Stock-up scan goes straight to stock in the
+    # chosen area with that area's shelf-life date. Anything unresolved falls
+    # through to the ordinary queue below (placed in the batch area), so a
+    # scan is never lost. See services/batch_add.py.
+    batch_area = batch_add.active_area() if mode == "inventory" else None
+    if batch_area:
+        try:
+            item = await lookup_barcode(barcode, db)
+        except (BarcodeNotFound, BarcodeServiceError, BarcodeStoreLocal):
+            item = None
+        if item is not None:
+            item.quantity = body.quantity
+            _apply_storage_override(item, batch_area, db, recompute_date=True)
+            outcome = await _commit_instant_add(item, barcode, db)
+            if outcome is not None:
+                batch_add.touch(added=True)
+                return {**outcome, "batch_area": batch_area}
+        batch_add.touch(added=False)
+
     if mode == "inventory" and settings.quick_add_mode:
         try:
             item = await lookup_barcode(barcode, db)
@@ -653,6 +698,8 @@ async def scan_barcode(body: ScanRequest, request: Request, db: Session = Depend
     # updates the row when it lands. The response says "Saved, looking up..."
     # so the on-screen list can show the row immediately and fill in the name.
     placeholder = apply_defaults(FoodItem(name=f"Unknown ({barcode})"), db)
+    if batch_area:
+        _apply_storage_override(placeholder, batch_area, db, recompute_date=True)
     row = PendingItem(
         barcode=barcode,
         name=placeholder.name,

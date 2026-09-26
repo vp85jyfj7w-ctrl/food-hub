@@ -312,7 +312,10 @@ var _GROCYCODE_PREFIX = 'grcy:';
 async function submitScan(code) {
   code = (code || '').trim();
   if (!code) return;
-  if (currentMode === 'inventory' && !code.toLowerCase().startsWith(_GROCYCODE_PREFIX)) {
+  // Batch add on: nobody is at the screen to answer the date prompt, so the
+  // scan goes to the server, which files it in the batch area by itself.
+  if (currentMode === 'inventory' && !BATCH.active
+      && !code.toLowerCase().startsWith(_GROCYCODE_PREFIX)) {
     return confirmAndQuickAdd(code);
   }
   return submitScanToPending(code);
@@ -366,9 +369,11 @@ function handleScanResult(code, result) {
       // (both key off a pending id) and appends its own row to the same
       // on-screen recent-scans list instead.
       const name = (result.item && result.item.name) || code;
+      const where = result.batch_area ? ` (${esc(BATCH_LABELS[result.batch_area] || result.batch_area)})` : '';
       showStatus('barcode-status',
-        `<i class="bi bi-lightning-charge-fill text-success me-1"></i>Added straight to stock: <strong>${esc(name)}</strong>`,
+        `<i class="bi bi-lightning-charge-fill text-success me-1"></i>Added straight to stock${where}: <strong>${esc(name)}</strong>`,
         'success');
+      if (result.batch_area) refreshBatch();
       liveScans.set(`instant-${Date.now()}-${code}`, { barcode: code, name, enriching: false, failed: false });
       renderLiveScans();
       _barcodeSavedCount++;
@@ -1323,3 +1328,62 @@ async function readJson(r) {
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 }
+
+
+// ------------------------------------------------------------ batch add ----
+// Food Hub, Sept 2026: see the batch-card comment in add.html and
+// services/batch_add.py. Polled so the card notices the one-hour auto-off,
+// and a change made on another screen (phone vs kiosk).
+var BATCH = { active: false };
+var BATCH_LABELS = { frozen: 'Freezer', refrigerated: 'Fridge', dry: 'Cupboard', room_temp: 'Counter' };
+
+function paintBatch() {
+  var box = document.getElementById('batch-buttons');
+  var card = document.getElementById('batch-card');
+  var desc = document.getElementById('batch-desc');
+  if (!box || !card || !desc) return;
+  var area = BATCH.active ? BATCH.area : '';
+  box.querySelectorAll('button').forEach(function (b) {
+    var on = (b.dataset.area || '') === area;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  card.classList.toggle('border-info', !!BATCH.active);
+  card.classList.toggle('border-2', !!BATCH.active);
+  if (BATCH.active) {
+    desc.innerHTML = '<strong class="text-info">On: every scan goes into the '
+      + esc(BATCH.label || BATCH.area) + '</strong> with its own date'
+      + (BATCH.count ? ' &middot; ' + BATCH.count + ' added so far' : '')
+      + '. Anything it doesn\'t recognise waits on Pending. Turns itself off after '
+      + (BATCH.idle_minutes || 60) + ' minutes with no scans.';
+  } else {
+    desc.textContent = 'Scanning away from this screen? Pick where it is all going: '
+      + 'each scan goes straight into stock there, with no date prompt.';
+  }
+}
+
+async function refreshBatch() {
+  try {
+    var r = await fetch('pending/batch', { cache: 'no-store' });
+    if (r.ok) { BATCH = await r.json(); paintBatch(); }
+  } catch (e) { /* keep the last known state */ }
+}
+
+(function () {
+  var box = document.getElementById('batch-buttons');
+  if (!box) return;
+  box.addEventListener('click', async function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    var area = b.dataset.area || '';
+    try {
+      var r = area
+        ? await fetch('pending/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                         body: JSON.stringify({ area: area }) })
+        : await fetch('pending/batch', { method: 'DELETE' });
+      if (r.ok) { BATCH = await r.json(); paintBatch(); }
+    } catch (e2) { /* network blip: the poll below corrects the card */ }
+  });
+  refreshBatch();
+  setInterval(refreshBatch, 30000);
+})();

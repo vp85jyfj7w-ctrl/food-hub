@@ -9,6 +9,34 @@ from .navigation import (visible_tabs, auto_hidden_groups, build_nav_tree,
                          first_visible_href, float_nav_pages)
 
 
+def _asset_fingerprint() -> str:
+    """Short hash of every static file's path, size and mtime (Food Hub, Sept
+    2026). Static URLs are served with a year-long immutable cache and busted
+    with ?v=<app_version>, but this fork changes its JS/CSS without bumping
+    APP_VERSION, so browsers (the kitchen kiosk especially) kept running old
+    code after a deploy. Folding this in changes every ?v= whenever any static
+    file changes. Computed once at startup; the app restarts on every deploy."""
+    import hashlib
+    import os
+    from pathlib import Path
+
+    root = Path(__file__).parent / "static"
+    h = hashlib.sha1()
+    try:
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames.sort()
+            for name in sorted(filenames):
+                st = os.stat(os.path.join(dirpath, name))
+                h.update(f"{dirpath}/{name}:{st.st_size}:{st.st_mtime_ns}".encode())
+    except OSError:
+        return ""
+    return h.hexdigest()[:8]
+
+
+_FP = _asset_fingerprint()
+_ASSET_VERSION = APP_VERSION + ("-" + _FP if _FP else "")
+
+
 def theme_context(request: Request) -> dict:
     """Context processor: expose the current UI theme to every render.
 
@@ -136,7 +164,7 @@ def theme_context(request: Request) -> dict:
         "osk_enabled": settings.osk_enabled,
         # Cache-buster for static assets so a kiosk browser fetches fresh CSS/JS
         # after an update instead of serving a stale cached copy.
-        "app_version": APP_VERSION,
+        "app_version": _ASSET_VERSION,
         "app_name": APP_NAME,
           "app_tagline": APP_TAGLINE,
         # Read-only DEMO MODE (FoodAssistant-pxp0). Surfaced on every render so

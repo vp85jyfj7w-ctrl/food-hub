@@ -1199,7 +1199,14 @@ class CachedStaticFiles(StaticFiles):
 
     async def get_response(self, path, scope):
         response = await super().get_response(path, scope)
-        if response.status_code == 200:
+        if response.status_code == 200 and str(path).replace("\\", "/").startswith("scan/"):
+            # Food Hub, Sept 2026: the phone scan page (static/scan, bind-mounted
+            # from the NAS, see the UGREEN Port Register runbook) is opened by a
+            # fixed bookmark with no ?v= busting, so a year-long cache left
+            # phones on an old copy after every change. Always revalidate it
+            # (ETag makes that a cheap 304).
+            response.headers["Cache-Control"] = "no-cache"
+        elif response.status_code == 200:
             # A year + immutable: every template URL is ?v=APP_VERSION busted,
             # so an update changes the URL; the old one can cache forever and
             # the kiosk never spends a round trip revalidating it (7dt9).

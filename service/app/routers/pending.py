@@ -940,6 +940,9 @@ class OwnItemConfirm(BaseModel):
     description: str
     quantity: float = 1.0
     best_by_date: Optional[str] = None  # "" or None = no date
+    # Food Hub, Oct 2026 (Telegram prep bot): "55 belly pork fridge" files
+    # the label in the fridge. None keeps the category's default area.
+    storage_type: Optional[str] = None
 
 
 @router.post("/own-item")
@@ -983,7 +986,9 @@ async def own_item_confirmed(body: OwnItemConfirm, request: Request,
     item = FoodItem(
         name=f"{label} - {description}",
         quantity=body.quantity,
-        storage_type=OWN_ITEM_PREFIX_STORAGE.get(barcode[:2], StorageType.frozen),
+        storage_type=(StorageType(body.storage_type)
+                      if body.storage_type in StorageType._value2member_map_
+                      else OWN_ITEM_PREFIX_STORAGE.get(barcode[:2], StorageType.frozen)),
         category=FoodCategory.other,
     )
     if body.best_by_date:

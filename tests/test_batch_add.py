@@ -152,3 +152,17 @@ def test_ask_date_setting_and_confirmed_add_counts(client, world):
     # Unticking keeps the running count for the same area.
     s = client.post("pending/batch", json={"area": "frozen", "ask_date": False}).json()
     assert s["ask_date"] is False and s["count"] == 1
+
+
+def test_own_item_storage_override(client, world):
+    when = (date.today() + timedelta(days=3)).isoformat()
+    r = client.post("pending/own-item", json={"barcode": "Prepped food 55",
+                                              "description": "Belly Pork",
+                                              "best_by_date": when,
+                                              "storage_type": "refrigerated"}).json()
+    assert r["status"] == "instant_added"
+    assert world[-1].name == "Prepped Food #55 - Belly Pork"
+    assert world[-1].storage_type.value == "refrigerated"
+    assert world[-1].best_by_date.isoformat() == when
+    client.post("pending/own-item", json={"barcode": "Prepped food 56", "description": "Chilli"})
+    assert world[-1].storage_type.value == "frozen"   # default unchanged

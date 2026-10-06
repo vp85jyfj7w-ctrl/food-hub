@@ -64,7 +64,7 @@ def test_import_item_links_the_scanned_barcode(monkeypatch):
     async def fake_ensure_product(self, item, lid, gid):
         return 42
 
-    async def fake_add_stock(self, pid, item):
+    async def fake_add_stock(self, pid, item, **kw):
         return {}
 
     monkeypatch.setattr(GrocyClient, "ensure_location", fake_ensure_location)
@@ -89,7 +89,7 @@ def test_import_item_without_barcode_registers_nothing(monkeypatch):
     async def fake_ensure_product(self, item, lid, gid):
         return 42
 
-    async def fake_add_stock(self, pid, item):
+    async def fake_add_stock(self, pid, item, **kw):
         return {}
 
     monkeypatch.setattr(GrocyClient, "ensure_product", fake_ensure_product)

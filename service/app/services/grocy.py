@@ -493,7 +493,8 @@ class GrocyClient:
         products.append({"id": new_id, "name": item.name})
         return new_id
 
-    async def add_stock(self, product_id: int, item: FoodItem) -> dict:
+    async def add_stock(self, product_id: int, item: FoodItem,
+                        location_id: int | None = None) -> dict:
         best_before = (
             item.best_by_date.isoformat() if item.best_by_date else date.today().isoformat()
         )
@@ -502,13 +503,20 @@ class GrocyClient:
         purchased = (
             item.purchased_on.isoformat() if item.purchased_on else date.today().isoformat()
         )
-        return await self._post(f"/stock/products/{product_id}/add", {
+        body = {
             "amount": item.quantity,
             "best_before_date": best_before,
             "purchased_date": purchased,
             "price": None,
             "note": item.brand or "",
-        })
+        }
+        # Land the stock where the item says it is (Oct 2026): without this,
+        # Grocy files it under the product's default location, so adding
+        # "Chicken Fillets" to the fridge put it in the freezer if the product
+        # was first created there.
+        if location_id is not None:
+            body["location_id"] = location_id
+        return await self._post(f"/stock/products/{product_id}/add", body)
 
     async def consume_stock(self, product_id: int, amount: float = 1.0,
                             spoiled: bool = False) -> dict:
@@ -956,7 +964,7 @@ class GrocyClient:
         location_id = await self.ensure_location(storage_name)
         group_id = await self.ensure_product_group(item.category.value)
         product_id = await self.ensure_product(item, location_id, group_id)
-        await self.add_stock(product_id, item)
+        await self.add_stock(product_id, item, location_id=location_id)
         # Link the scanned barcode to the product so a later consume-mode scan
         # can resolve it. Best effort: a failure here must not lose the stock
         # add that already happened.

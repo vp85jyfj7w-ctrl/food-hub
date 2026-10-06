@@ -131,3 +131,24 @@ async def test_add_stock_falls_back_to_today(anyio_backend):
     await FakeGrocy().add_stock(7, item)
 
     assert sent["body"]["purchased_date"] == date.today().isoformat()
+
+
+@pytest.mark.anyio
+async def test_add_stock_sends_location_when_given(anyio_backend):
+    """import_item passes the storage location so stock lands in the area the
+    item was added to, not the product's default location (Oct 2026)."""
+    sent = {}
+
+    class FakeGrocy(GrocyClient):
+        def __init__(self):
+            pass
+
+        async def _post(self, path, body):
+            sent["body"] = body
+            return {}
+
+    item = FoodItem(name="Chicken Fillets", quantity=1)
+    await FakeGrocy().add_stock(5, item, location_id=3)
+    assert sent["body"]["location_id"] == 3
+    await FakeGrocy().add_stock(5, item)
+    assert "location_id" not in sent["body"]

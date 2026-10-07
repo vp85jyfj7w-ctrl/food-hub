@@ -628,8 +628,15 @@ class GrocyClient:
         expiring.sort(key=lambda x: x["days_remaining"])
         return expiring
 
-    async def get_full_stock(self, split_locations: bool = False) -> list[dict]:
-        """Return all stock entries enriched with name, location, days_remaining, urgency, and storage bucket."""
+    async def get_full_stock(self, split_locations: bool = False,
+                             split_units: bool = False) -> list[dict]:
+        """Return all stock entries enriched with name, location, days_remaining, urgency, and storage bucket.
+
+        split_units (Oct 2026, Will: "three of the same item with the same
+        date still need listing individually"): one row per unit of every
+        Grocy stock entry, each with that entry's own location, best-by and
+        date added, instead of one lumped row per product and location.
+        """
         # None of these four reads depends on another, so the dashboard waits
         # once instead of four times over. return_exceptions keeps a Grocy
         # outage (which fails all four at once) from leaving three exceptions
@@ -679,10 +686,44 @@ class GrocyClient:
                 b = row.get("best_before_date")
                 if b and b != "2999-12-31" and (g["bbd"] is None or b < g["bbd"]):
                     g["bbd"] = b
+        units: dict[int, list[dict]] = {}
+        if split_units:
+            for row in stock_rows:
+                pid = int(row.get("product_id") or 0)
+                if pid and float(row.get("amount") or 0) > 0:
+                    units.setdefault(pid, []).append(row)
         today = date.today()
         result = []
         entries_to_emit: list[dict] = []
         for entry in raw:
+            _upid = int(entry.get("product_id", 0))
+            if units.get(_upid):
+                rows = sorted(units[_upid], key=lambda r: (
+                    r.get("best_before_date") or "9999",
+                    r.get("row_created_timestamp") or ""))
+                total = sum(float(r.get("amount") or 0) for r in rows)
+                opened_left = opened.get(_upid, 0.0)
+                for row in rows:
+                    amt = float(row.get("amount") or 0)
+                    whole = int(amt)
+                    pieces = [1.0] * whole
+                    if amt - whole > 1e-9:
+                        pieces.append(round(amt - whole, 4))
+                    for piece in pieces:
+                        sub = dict(entry)
+                        lid = str(row.get("location_id") or "")
+                        sub["location_id"] = int(lid) if lid.isdigit() else None
+                        sub["amount"] = piece
+                        if row.get("best_before_date"):
+                            sub["best_before_date"] = row["best_before_date"]
+                        sub["_total_amount"] = total
+                        sub["_added"] = (row.get("row_created_timestamp")
+                                         or row.get("purchased_date"))
+                        sub["_entry_id"] = row.get("id")
+                        sub["_opened"] = min(opened_left, piece)
+                        opened_left -= sub["_opened"]
+                        entries_to_emit.append(sub)
+                continue
             product = entry.get("product") or {}
             _pid = int(entry.get("product_id", 0))
             groups_here = by_loc.get(_pid, {})
@@ -739,8 +780,10 @@ class GrocyClient:
                 "location_name": loc_name,
                 "storage_bucket": bucket,
                 "category": groups.get(group_id, ""),
-                "added_date": added.get(pid),
-                "amount_opened": min(opened.get(pid, 0.0), float(entry.get("amount") or 0)),
+                "added_date": entry.get("_added") or added.get(pid),
+                "amount_opened": (entry["_opened"] if "_opened" in entry else
+                                  min(opened.get(pid, 0.0), float(entry.get("amount") or 0))),
+                **({"entry_id": entry.get("_entry_id")} if "_entry_id" in entry else {}),
             })
         return result
 

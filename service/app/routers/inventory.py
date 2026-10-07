@@ -172,11 +172,15 @@ async def move_item(product_id: int, body: MoveRequest, db: Session = Depends(ge
 
 
 @router.get("/dashboard")
-async def get_dashboard(sort: str = "expiry_asc"):
-    """Return stock grouped by storage bucket, sorted by the requested key."""
+async def get_dashboard(sort: str = "expiry_asc", units: bool = False):
+    """Return stock grouped by storage bucket, sorted by the requested key.
+
+    units=1 lists every unit on its own row with its own date (Oct 2026).
+    """
     grocy = GrocyClient()
     try:
-        items = await grocy.get_full_stock(split_locations=True)
+        items = await grocy.get_full_stock(
+            split_locations=True, **({"split_units": True} if units else {}))
     except GrocyError as e:
         # 502 with honest copy, never a raw 500: the dashboard renders the
         # detail as its outage banner (FoodAssistant-2cmm). A Grocy-reported

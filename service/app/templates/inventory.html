@@ -333,9 +333,9 @@ function renderPanel(panelId, countId, items, bucket) {
     el.innerHTML = '<div class="panel-empty"><i class="bi bi-check-circle text-success me-1"></i>Empty</div>';
     return;
   }
-  el.innerHTML = items.map(item => `
+  el.innerHTML = items.map((item, idx) => `
     <div class="item-row ${selectMode ? 'selectable' : ''} ${selectMode && selectedIds.has(item.product_id) ? 'row-selected' : ''}"
-         id="row-${item.product_id}-${bucket}" ${selectMode ? '' : 'draggable="true"'}
+         id="row-${item.product_id}-${bucket}-${item.entry_id ?? 0}-${idx}" ${selectMode ? '' : 'draggable="true"'}
          data-product-id="${item.product_id}" data-bucket="${bucket}" data-amount="${item.amount}" data-name="${esc(item.name)}"
          ${selectMode ? `onclick="toggleSelect(${item.product_id})"` : 'ondragstart="dragStart(event)" ondragend="dragEnd(event)"'}>
       ${selectMode ? `
@@ -390,7 +390,13 @@ function renderPanel(panelId, countId, items, bucket) {
 const itemsById = {};
 
 function storeItems(items) {
-  items.forEach(i => { itemsById[i.product_id] = i; });
+  // Rows are one per unit now (Oct 2026), so the product-level entry used by
+  // Edit and the bulk actions carries the product's whole amount.
+  Object.keys(itemsById).forEach(k => delete itemsById[k]);
+  items.forEach(i => {
+    const prev = itemsById[i.product_id];
+    itemsById[i.product_id] = prev ? { ...prev, amount: prev.amount + i.amount } : { ...i };
+  });
 }
 
 // ── Multi-select (Will, Sept 2026: "batch move stuff to another location or
@@ -585,6 +591,7 @@ function dragStart(e) {
     productId: parseInt(row.dataset.productId),
     fromBucket: row.dataset.bucket,
     name: row.dataset.name,
+    amount: parseFloat(row.dataset.amount) || null,  // just the dragged row
   };
   row.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
@@ -615,10 +622,10 @@ async function dropItem(e) {
   const panel = e.currentTarget;
   panel.classList.remove('drop-target');
   if (!dragged || panel.dataset.bucket === dragged.fromBucket) return;
-  const { productId, name } = dragged;
+  const { productId, name, amount } = dragged;
   const dragged_from = dragged.fromBucket;
   dragged = null;
-  await moveItem(productId, panel.dataset.bucket, name, null, dragged_from);
+  await moveItem(productId, panel.dataset.bucket, name, amount, dragged_from);
 }
 
 // Move via modal (touch devices)
@@ -645,7 +652,7 @@ async function moveFromModal(bucket) {
   if (!moveTarget) return;
   const { productId, name, fromBucket, max } = moveTarget;
   moveTarget = null;
-  let amount = null;
+  let amount = max;  // one listed row = just that row's amount (Oct 2026)
   if (max > 1) {
     const v = parseFloat(document.getElementById('moveQty').value);
     if (isNaN(v) || v <= 0) { showToast('Enter how many to move', true); return; }
@@ -684,7 +691,7 @@ async function loadDashboard() {
   document.getElementById('loading-spinner').style.display = '';
   const status = document.getElementById('inventory-status');
   try {
-    const r = await fetch(`/inventory/dashboard?sort=${sort}`);
+    const r = await fetch(`/inventory/dashboard?sort=${sort}&units=1`);
     if (!r.ok) {
       // Outages answer with a JSON detail written for people ("Grocy is not
       // reachable..."), so surface that, never a raw error page. A Grocy
@@ -775,7 +782,7 @@ async function consume(productId, amount, name) {
 // "Toss it" button already uses (services/waste.py's summary reads its log
 // either way, so Inventory tosses show up in that summary too).
 async function tossItem(productId, amount, name) {
-  if (!confirm(`Toss all ${name} as wasted? This removes it from your stock and is recorded as spoiled, not eaten.`)) return;
+  if (!confirm(`Toss ${amount === 1 ? 'one' : amount} ${name} as wasted? This removes it from your stock and is recorded as spoiled, not eaten.`)) return;
   try {
     const r = await fetch(`/expiring/toss/${productId}`, {
       method: 'POST',

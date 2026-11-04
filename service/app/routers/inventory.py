@@ -63,6 +63,31 @@ async def consume_item(product_id: int, amount: float = 1.0):
         raise HTTPException(500, str(e))
 
 
+@router.post("/consume-entry/{product_id}/{entry_id}")
+async def consume_entry(product_id: int, entry_id: str, amount: float = 1.0,
+                        spoiled: bool = False):
+    """Take stock off ONE exact Grocy stock entry (Nov 2026, Telegram prep bot
+    entry codes). /consume/{product_id} lets Grocy pick the entry (soonest
+    best-before first), which is wrong when the user named a specific entry.
+    spoiled=true books it as waste, the same flag /expiring/toss uses."""
+    grocy = GrocyClient()
+    try:
+        # The dashboard's entry_id is Grocy's numeric row id; the consume call
+        # wants that entry's stock_id string, so look it up first.
+        entries = await grocy._get(f"/stock/products/{product_id}/entries")
+        row = next((e for e in entries if str(e.get("id")) == str(entry_id)
+                    or str(e.get("stock_id")) == str(entry_id)), None)
+        if row is None or not row.get("stock_id"):
+            raise HTTPException(404, "That stock entry is gone or already used up.")
+        return await grocy.consume_stock_entry(product_id, row["stock_id"], amount, spoiled)
+    except HTTPException:
+        raise
+    except GrocyError as e:
+        raise HTTPException(502, str(e))
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @router.post("/open/{product_id}")
 async def open_item(product_id: int, amount: float = 1.0):
     """Mark one unit of a product opened in Grocy (FoodAssistant-oyef).

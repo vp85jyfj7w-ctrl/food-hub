@@ -1154,7 +1154,8 @@ class GrocyClient:
             return False
 
     async def consume_stock_entry(self, product_id: int, stock_entry_id: str,
-                                  amount: float = 1.0) -> dict | list:
+                                  amount: float = 1.0,
+                                  spoiled: bool = False) -> dict | list:
         """Consume from one exact stock entry of a product (FoodAssistant-28f3).
 
         This is what a printed label's grocycode resolves to: Grocy takes the
@@ -1164,10 +1165,13 @@ class GrocyClient:
         entry's best-before date, which the scan reply reads back). Raises
         GrocyError (via _post) when the entry is gone or already used up.
         """
-        return await self._post(f"/stock/products/{product_id}/consume", {
+        body = {
             "amount": amount,
             "stock_entry_id": stock_entry_id,
-        })
+        }
+        if spoiled:  # only sent when true, so existing callers' bodies are unchanged
+            body["spoiled"] = True
+        return await self._post(f"/stock/products/{product_id}/consume", body)
 
 
 # StorageType enum value → Grocy location name, used by import_item. The enum
